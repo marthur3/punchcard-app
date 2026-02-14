@@ -2,8 +2,8 @@
 
 import type React from "react"
 
-import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { Suspense, useState } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -11,40 +11,42 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Eye, EyeOff, LogIn, ArrowLeft } from "lucide-react"
-import { loginUser } from "@/lib/auth"
 import { useAuth } from "@/lib/auth-context"
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("demo@example.com")
-  const [password, setPassword] = useState("demo123")
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div></div>}>
+      <LoginContent />
+    </Suspense>
+  )
+}
+
+function LoginContent() {
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { login } = useAuth()
+
+  const redirect = searchParams.get("redirect") || "/dashboard"
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
     setError("")
 
-    console.log("Form submitted with:", { email, password })
-
     try {
-      const result = await loginUser(email, password)
-      console.log("Login result:", result)
+      const result = await login(email, password)
 
-      if (result.success && result.token) {
-        console.log("Login successful, calling login function")
-        login(result.token)
-        console.log("Redirecting to dashboard")
-        router.push("/dashboard")
+      if (result.success) {
+        router.push(redirect)
       } else {
-        console.log("Login failed:", result.error)
         setError(result.error || "Login failed")
       }
-    } catch (err) {
-      console.error("Login error:", err)
+    } catch {
       setError("An unexpected error occurred")
     }
 
@@ -90,6 +92,11 @@ export default function LoginPage() {
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="your@email.com"
                   className="border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                  autoComplete="email"
+                  inputMode="email"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck="false"
                   required
                 />
               </div>
@@ -106,6 +113,10 @@ export default function LoginPage() {
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Enter your password"
                     className="border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                    autoComplete="current-password"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck="false"
                     required
                   />
                   <Button
@@ -160,19 +171,6 @@ export default function LoginPage() {
               </div>
               <p className="text-xs text-blue-800">Email: demo@example.com</p>
               <p className="text-xs text-blue-800">Password: demo123</p>
-              <p className="text-xs text-blue-700 mt-1">Click "Use Demo" to auto-fill credentials</p>
-            </div>
-
-            {/* Debug info */}
-            <div className="mt-4 p-3 bg-gray-50 rounded text-xs text-gray-600 border border-gray-200">
-              <p>
-                Debug: Demo mode ={" "}
-                {String(
-                  !process.env.NEXT_PUBLIC_SUPABASE_URL ||
-                    process.env.NEXT_PUBLIC_SUPABASE_URL === "https://demo.supabase.co",
-                )}
-              </p>
-              <p>Supabase URL: {process.env.NEXT_PUBLIC_SUPABASE_URL || "undefined"}</p>
             </div>
           </CardContent>
         </Card>

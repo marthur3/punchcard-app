@@ -1,10 +1,23 @@
-import { createClient } from "@supabase/supabase-js"
+import { createClient, type SupabaseClient } from "@supabase/supabase-js"
 
-// For demo purposes, we'll use fallback values if environment variables aren't set
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://demo.supabase.co"
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "demo-key"
+// ===========================================
+// DEMO MODE DETECTION
+// ===========================================
 
-// Create a mock client for demo purposes when real Supabase isn't configured
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ""
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ""
+
+export const isDemoMode =
+  !supabaseUrl ||
+  supabaseUrl === "https://demo.supabase.co" ||
+  process.env.ENABLE_DEMO_MODE === "true"
+
+// ===========================================
+// CLIENT-SIDE SUPABASE (anon key, respects RLS)
+// ===========================================
+
+// Create a mock client for demo mode
 const createMockClient = () => {
   return {
     from: (table: string) => ({
@@ -18,7 +31,9 @@ const createMockClient = () => {
           }),
           lte: (column: string, value: any) => Promise.resolve({ data: [], error: null }),
         }),
-        order: (column: string, options?: any) => Promise.resolve({ data: [], error: null }),
+        order: (column: string, options?: any) => ({
+          limit: (count: number) => Promise.resolve({ data: [], error: null }),
+        }),
         limit: (count: number) => Promise.resolve({ data: [], error: null }),
         single: () => Promise.resolve({ data: null, error: null }),
       }),
@@ -41,11 +56,33 @@ const createMockClient = () => {
   }
 }
 
-// Use real Supabase client if configured, otherwise use mock
-export const supabase =
-  supabaseUrl !== "https://demo.supabase.co" && supabaseAnonKey !== "demo-key"
-    ? createClient(supabaseUrl, supabaseAnonKey)
-    : (createMockClient() as any)
+// Public client (for client-side use with anon key)
+export const supabase: SupabaseClient | any = isDemoMode
+  ? createMockClient()
+  : createClient(supabaseUrl, supabaseAnonKey)
+
+// ===========================================
+// SERVER-SIDE SUPABASE (service role key, bypasses RLS)
+// ===========================================
+
+let _supabaseServer: SupabaseClient | null = null
+
+export function getSupabaseServer(): SupabaseClient {
+  if (isDemoMode) {
+    throw new Error("Cannot use server Supabase in demo mode")
+  }
+  if (!_supabaseServer) {
+    if (!supabaseServiceKey) {
+      throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY environment variable")
+    }
+    _supabaseServer = createClient(supabaseUrl, supabaseServiceKey)
+  }
+  return _supabaseServer
+}
+
+// ===========================================
+// TYPE DEFINITIONS
+// ===========================================
 
 export type Database = {
   public: {
@@ -68,6 +105,8 @@ export type Database = {
           email: string
           name: string
           phone: string | null
+          password_hash: string | null
+          is_verified: boolean
           created_at: string
           updated_at: string
         }
@@ -113,6 +152,40 @@ export type Database = {
           prize_id: string
           punch_card_id: string
           redeemed_at: string
+        }
+      }
+      user_sessions: {
+        Row: {
+          id: string
+          user_id: string
+          session_token: string
+          expires_at: string
+          created_at: string
+        }
+      }
+      business_admins: {
+        Row: {
+          id: string
+          business_id: string
+          email: string
+          name: string
+          password_hash: string
+          is_verified: boolean
+          role: string
+          created_at: string
+          updated_at: string
+          last_login: string | null
+        }
+      }
+      business_admin_sessions: {
+        Row: {
+          id: string
+          admin_id: string
+          session_token: string
+          expires_at: string
+          ip_address: string | null
+          user_agent: string | null
+          created_at: string
         }
       }
     }

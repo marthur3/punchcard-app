@@ -17,8 +17,18 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Store, Gift, Users, TrendingUp, Plus, Edit, CheckCircle, Trophy } from "lucide-react"
-import { supabase } from "@/lib/supabase"
+import { isDemoMode } from "@/lib/supabase"
 import Link from "next/link"
+
+interface LeaderboardEntry {
+  rank: number
+  user_id: string
+  display_name: string
+  total_punches: number
+  tier: string
+  badge?: string
+  businesses_visited?: number
+}
 
 interface Business {
   id: string
@@ -58,22 +68,13 @@ export default function BusinessDashboard() {
   })
 
   const fetchBusinesses = async () => {
-    // Check if we're in demo mode
-    const isDemoMode =
-      process.env.NEXT_PUBLIC_SUPABASE_URL === undefined ||
-      process.env.NEXT_PUBLIC_SUPABASE_URL === "https://demo.supabase.co"
-
     if (isDemoMode) {
       const { demoBusinesses } = await import("@/lib/demo-data")
-      
-      // Load registered businesses from localStorage
+
       const registeredBusinesses = JSON.parse(localStorage.getItem('demo_registered_businesses') || '[]')
-      
-      // Combine demo and registered businesses
       const allBusinesses = [...demoBusinesses, ...registeredBusinesses]
       setBusinesses(allBusinesses)
-      
-      // Check if user has an admin session for a specific business
+
       const adminSession = JSON.parse(localStorage.getItem('business_admin_session') || '{}')
       if (adminSession.business_id) {
         const userBusiness = allBusinesses.find(b => b.id === adminSession.business_id)
@@ -82,70 +83,64 @@ export default function BusinessDashboard() {
           return
         }
       }
-      
+
       if (allBusinesses.length > 0 && !selectedBusiness) {
         setSelectedBusiness(allBusinesses[0])
       }
       return
     }
 
-    const { data } = await supabase.from("businesses").select("*").order("name")
-
-    setBusinesses(data || [])
-    if (data && data.length > 0 && !selectedBusiness) {
-      setSelectedBusiness(data[0])
+    try {
+      const res = await fetch("/api/businesses")
+      if (res.ok) {
+        const data = await res.json()
+        const bizList = data.businesses || []
+        setBusinesses(bizList)
+        if (bizList.length > 0 && !selectedBusiness) {
+          setSelectedBusiness(bizList[0])
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching businesses:", error)
     }
   }
 
   const fetchPrizes = async (businessId: string) => {
-    // Check if we're in demo mode
-    const isDemoMode =
-      process.env.NEXT_PUBLIC_SUPABASE_URL === undefined ||
-      process.env.NEXT_PUBLIC_SUPABASE_URL === "https://demo.supabase.co"
-
     if (isDemoMode) {
       const { demoPrizes } = await import("@/lib/demo-data")
-      
-      // Load registered prizes from localStorage
       const registeredPrizes = JSON.parse(localStorage.getItem('demo_registered_prizes') || '[]')
-      
-      // Combine demo and registered prizes for this business
       const demoPrizesForBusiness = demoPrizes.filter((p) => p.business_id === businessId)
       const registeredPrizesForBusiness = registeredPrizes.filter((p: any) => p.business_id === businessId)
-      
-      const allPrizes = [...demoPrizesForBusiness, ...registeredPrizesForBusiness]
-      setPrizes(allPrizes)
+      setPrizes([...demoPrizesForBusiness, ...registeredPrizesForBusiness])
       return
     }
 
-    const { data } = await supabase.from("prizes").select("*").eq("business_id", businessId).order("punches_required")
-
-    setPrizes(data || [])
+    try {
+      const res = await fetch(`/api/prizes?business_id=${businessId}`)
+      if (res.ok) {
+        const data = await res.json()
+        setPrizes(data.prizes || [])
+      }
+    } catch (error) {
+      console.error("Error fetching prizes:", error)
+    }
   }
 
   const fetchAnalytics = async (businessId: string) => {
     setIsLoading(true)
     try {
-      // Check if we're in demo mode
-      const isDemoMode =
-        process.env.NEXT_PUBLIC_SUPABASE_URL === undefined ||
-        process.env.NEXT_PUBLIC_SUPABASE_URL === "https://demo.supabase.co"
-
       if (isDemoMode) {
-        const { demoPunchCards, demoPunches } = await import("@/lib/demo-data")
-        
-        // Get saved cards from localStorage
+        const { demoPunchCards, getBusinessLeaderboard, generateLeaderboardData } = await import("@/lib/demo-data")
+
         let savedCards: any[] = []
         if (typeof window !== "undefined") {
           savedCards = JSON.parse(localStorage.getItem("demo_punch_cards") || "[]")
         }
 
-        // Merge demo cards with saved cards for this business
         const businessCards = demoPunchCards.filter((c) => c.business_id === businessId)
-        const businessSavedCards = savedCards.filter((c) => c.business_id === businessId)
-        
-        // Calculate demo analytics
-        const totalPunches = businessSavedCards.reduce((sum, card) => sum + card.total_punches, 0) + 
+        const businessSavedCards = savedCards.filter((c: any) => c.business_id === businessId)
+
+        const totalPunches = businessSavedCards.reduce((sum: number, card: any) => sum + card.total_punches, 0) +
                             businessCards.reduce((sum, card) => sum + card.total_punches, 0)
         const activeUsers = Math.max(businessCards.length, businessSavedCards.length)
         const avgPunchesPerUser = activeUsers > 0 ? totalPunches / activeUsers : 0
@@ -153,56 +148,40 @@ export default function BusinessDashboard() {
         setAnalytics({
           totalPunches,
           activeUsers,
-          prizesRedeemed: 2, // Demo value
+          prizesRedeemed: 2,
           avgPunchesPerUser: Math.round(avgPunchesPerUser * 10) / 10,
         })
 
-        // Load leaderboard data
-        const businessLeaderboardData = getBusinessLeaderboard(businessId)
-        const globalLeaderboardData = generateLeaderboardData()
-        setBusinessLeaderboard(businessLeaderboardData)
-        setGlobalLeaderboard(globalLeaderboardData)
+        setBusinessLeaderboard(getBusinessLeaderboard(businessId))
+        setGlobalLeaderboard(generateLeaderboardData())
+      } else {
+        // Real mode: fetch from API
+        const [analyticsRes, bizLeaderboardRes, globalLeaderboardRes] = await Promise.all([
+          fetch("/api/business/analytics"),
+          fetch(`/api/leaderboard?business_id=${businessId}&limit=10`),
+          fetch("/api/leaderboard?limit=10"),
+        ])
 
-        setIsLoading(false)
-        return
+        if (analyticsRes.ok) {
+          const data = await analyticsRes.json()
+          setAnalytics({
+            totalPunches: data.total_punches,
+            activeUsers: data.active_users,
+            prizesRedeemed: data.prizes_redeemed,
+            avgPunchesPerUser: data.avg_punches_per_user,
+          })
+        }
+
+        if (bizLeaderboardRes.ok) {
+          const data = await bizLeaderboardRes.json()
+          setBusinessLeaderboard(data.leaderboard || [])
+        }
+
+        if (globalLeaderboardRes.ok) {
+          const data = await globalLeaderboardRes.json()
+          setGlobalLeaderboard(data.leaderboard || [])
+        }
       }
-
-      // Real Supabase mode
-      // Get total punches
-      const { count: totalPunches } = await supabase
-        .from("punches")
-        .select("*", { count: "exact", head: true })
-        .eq("business_id", businessId)
-
-      // Get active users (users with punch cards)
-      const { count: activeUsers } = await supabase
-        .from("punch_cards")
-        .select("*", { count: "exact", head: true })
-        .eq("business_id", businessId)
-
-      // Get redeemed prizes
-      const { count: prizesRedeemed } = await supabase
-        .from("redeemed_prizes")
-        .select("*", { count: "exact", head: true })
-        .eq("business_id", businessId)
-
-      // Calculate average punches per user
-      const { data: punchCards } = await supabase
-        .from("punch_cards")
-        .select("total_punches")
-        .eq("business_id", businessId)
-
-      const avgPunchesPerUser =
-        punchCards && punchCards.length > 0
-          ? punchCards.reduce((sum, card) => sum + card.total_punches, 0) / punchCards.length
-          : 0
-
-      setAnalytics({
-        totalPunches: totalPunches || 0,
-        activeUsers: activeUsers || 0,
-        prizesRedeemed: prizesRedeemed || 0,
-        avgPunchesPerUser: Math.round(avgPunchesPerUser * 10) / 10,
-      })
     } catch (error) {
       console.error("Error fetching analytics:", error)
     } finally {
@@ -214,21 +193,40 @@ export default function BusinessDashboard() {
     if (!selectedBusiness || !newPrize.name) return
 
     try {
-      const { data } = await supabase
-        .from("prizes")
-        .insert({
+      if (isDemoMode) {
+        const prize = {
+          id: `prize-${Date.now()}`,
           business_id: selectedBusiness.id,
           name: newPrize.name,
           description: newPrize.description,
           punches_required: newPrize.punches_required,
+          is_active: true,
+        }
+        const registeredPrizes = JSON.parse(localStorage.getItem('demo_registered_prizes') || '[]')
+        registeredPrizes.push(prize)
+        localStorage.setItem('demo_registered_prizes', JSON.stringify(registeredPrizes))
+        setPrizes([...prizes, prize])
+      } else {
+        const res = await fetch("/api/business/prizes", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            business_id: selectedBusiness.id,
+            name: newPrize.name,
+            description: newPrize.description,
+            punches_required: newPrize.punches_required,
+          }),
         })
-        .select()
-        .single()
 
-      if (data) {
-        setPrizes([...prizes, data])
-        setNewPrize({ name: "", description: "", punches_required: 5 })
+        if (res.ok) {
+          const data = await res.json()
+          if (data.prize) {
+            setPrizes([...prizes, data.prize])
+          }
+        }
       }
+
+      setNewPrize({ name: "", description: "", punches_required: 5 })
     } catch (error) {
       console.error("Error adding prize:", error)
     }
@@ -236,9 +234,18 @@ export default function BusinessDashboard() {
 
   const togglePrizeStatus = async (prizeId: string, isActive: boolean) => {
     try {
-      await supabase.from("prizes").update({ is_active: !isActive }).eq("id", prizeId)
-
-      setPrizes(prizes.map((prize) => (prize.id === prizeId ? { ...prize, is_active: !isActive } : prize)))
+      if (isDemoMode) {
+        setPrizes(prizes.map((prize) => (prize.id === prizeId ? { ...prize, is_active: !isActive } : prize)))
+      } else {
+        const res = await fetch("/api/business/prizes", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: prizeId, is_active: !isActive }),
+        })
+        if (res.ok) {
+          setPrizes(prizes.map((prize) => (prize.id === prizeId ? { ...prize, is_active: !isActive } : prize)))
+        }
+      }
     } catch (error) {
       console.error("Error updating prize:", error)
     }
@@ -256,7 +263,7 @@ export default function BusinessDashboard() {
   }, [selectedBusiness])
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 p-4">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 p-4">
       <div className="max-w-6xl mx-auto">
         <div className="flex justify-between items-center mb-8">
           <div>
@@ -299,12 +306,11 @@ export default function BusinessDashboard() {
 
         {selectedBusiness && (
           <Tabs defaultValue="analytics" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-5">
+            <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="analytics">Analytics</TabsTrigger>
               <TabsTrigger value="leaderboard">Leaderboard</TabsTrigger>
               <TabsTrigger value="prizes">Manage Prizes</TabsTrigger>
               <TabsTrigger value="nfc">NFC Tags</TabsTrigger>
-              <TabsTrigger value="settings">Settings</TabsTrigger>
             </TabsList>
 
             <TabsContent value="analytics">
@@ -358,18 +364,6 @@ export default function BusinessDashboard() {
                 </Card>
               </div>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle>Recent Activity</CardTitle>
-                  <CardDescription>Latest punches and redemptions at {selectedBusiness.name}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-center py-8 text-gray-500">
-                    <TrendingUp className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p>Detailed analytics coming soon...</p>
-                  </div>
-                </CardContent>
-              </Card>
             </TabsContent>
 
             <TabsContent value="leaderboard">
@@ -611,18 +605,6 @@ export default function BusinessDashboard() {
                   </CardContent>
                 </Card>
 
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Prize Performance</CardTitle>
-                    <CardDescription>See which rewards are most popular</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-center py-8 text-gray-500">
-                      <Gift className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                      <p>Prize analytics coming soon...</p>
-                    </div>
-                  </CardContent>
-                </Card>
               </div>
             </TabsContent>
 
@@ -696,23 +678,6 @@ export default function BusinessDashboard() {
                         Test Customer Experience
                       </Button>
                       
-                      <Button 
-                        variant="outline" 
-                        className="w-full justify-start"
-                        disabled
-                      >
-                        <Edit className="h-4 w-4 mr-2" />
-                        Download NFC Labels (Coming Soon)
-                      </Button>
-                      
-                      <Button 
-                        variant="outline" 
-                        className="w-full justify-start"
-                        disabled
-                      >
-                        <Gift className="h-4 w-4 mr-2" />
-                        Order Physical Tags (Coming Soon)
-                      </Button>
                     </div>
 
                     <div className="bg-amber-50 p-4 rounded-lg border border-amber-200">
@@ -775,33 +740,6 @@ export default function BusinessDashboard() {
               </Card>
             </TabsContent>
 
-            <TabsContent value="settings">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Business Settings</CardTitle>
-                  <CardDescription>Configure your punch card program</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div>
-                    <Label htmlFor="business-name">Business Name</Label>
-                    <Input id="business-name" value={selectedBusiness.name} readOnly />
-                  </div>
-                  <div>
-                    <Label htmlFor="business-description">Description</Label>
-                    <Textarea id="business-description" value={selectedBusiness.description || ""} readOnly />
-                  </div>
-                  <div>
-                    <Label htmlFor="max-punches">Maximum Punches</Label>
-                    <Input id="max-punches" type="number" value={selectedBusiness.max_punches} readOnly />
-                  </div>
-                  <div>
-                    <Label htmlFor="nfc-tag">NFC Tag ID</Label>
-                    <Input id="nfc-tag" value={selectedBusiness.nfc_tag_id || ""} readOnly />
-                  </div>
-                  <Button disabled>Save Changes (Demo Mode)</Button>
-                </CardContent>
-              </Card>
-            </TabsContent>
           </Tabs>
         )}
       </div>

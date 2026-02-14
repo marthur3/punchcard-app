@@ -1,19 +1,19 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { Suspense, useState, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
-import { 
-  CheckCircle, 
-  Wifi, 
-  QrCode, 
-  Smartphone, 
-  Store, 
-  Gift, 
-  BarChart3, 
+import {
+  CheckCircle,
+  Wifi,
+  QrCode,
+  Smartphone,
+  Store,
+  Gift,
+  BarChart3,
   ArrowRight,
   ArrowLeft,
   Download,
@@ -23,12 +23,23 @@ import {
   PlayCircle
 } from "lucide-react"
 import Link from "next/link"
+import { Label } from "@/components/ui/label"
+import QRCode from "qrcode"
 
 export default function BusinessOnboardingPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div></div>}>
+      <OnboardingContent />
+    </Suspense>
+  )
+}
+
+function OnboardingContent() {
   const [currentStep, setCurrentStep] = useState(1)
   const [businessData, setBusinessData] = useState<any>(null)
   const [nfcTagId, setNfcTagId] = useState<string>('')
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set())
+  const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('')
   const router = useRouter()
   const searchParams = useSearchParams()
 
@@ -38,7 +49,7 @@ export default function BusinessOnboardingPage() {
   useEffect(() => {
     const businessId = searchParams?.get('business_id')
     const nfcTag = searchParams?.get('nfc_tag')
-    
+
     if (nfcTag) {
       setNfcTagId(nfcTag)
     }
@@ -52,6 +63,29 @@ export default function BusinessOnboardingPage() {
       }
     }
   }, [searchParams])
+
+  // Generate QR code when nfcTagId is available
+  useEffect(() => {
+    if (nfcTagId) {
+      const generateQRCode = async () => {
+        try {
+          const url = `${window.location.origin}/tap?nfc=${nfcTagId}`
+          const qrDataUrl = await QRCode.toDataURL(url, {
+            width: 300,
+            margin: 2,
+            color: {
+              dark: '#1e293b',
+              light: '#ffffff'
+            }
+          })
+          setQrCodeDataUrl(qrDataUrl)
+        } catch (err) {
+          console.error('Error generating QR code:', err)
+        }
+      }
+      generateQRCode()
+    }
+  }, [nfcTagId])
 
   const markStepComplete = (step: number) => {
     setCompletedSteps(prev => new Set([...prev, step]))
@@ -87,7 +121,7 @@ export default function BusinessOnboardingPage() {
         </text>
       </svg>
     `
-    
+
     const blob = new Blob([svg], { type: 'image/svg+xml' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -95,6 +129,15 @@ export default function BusinessOnboardingPage() {
     a.download = `${businessData?.name || 'business'}-nfc-label.svg`
     a.click()
     URL.revokeObjectURL(url)
+  }
+
+  const downloadQRCode = () => {
+    if (!qrCodeDataUrl) return
+
+    const a = document.createElement('a')
+    a.href = qrCodeDataUrl
+    a.download = `${businessData?.name || 'business'}-qr-code.png`
+    a.click()
   }
 
   const renderStep = () => {
@@ -251,11 +294,26 @@ export default function BusinessOnboardingPage() {
                   <CardDescription>For phones without NFC</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="bg-gray-100 p-6 rounded-lg text-center mb-4">
-                    <QrCode className="h-16 w-16 text-gray-400 mx-auto mb-2" />
-                    <p className="text-sm text-gray-600">QR code would be generated here</p>
+                  <div className="bg-white p-4 rounded-lg text-center mb-4 border-2 border-gray-200">
+                    {qrCodeDataUrl ? (
+                      <img
+                        src={qrCodeDataUrl}
+                        alt="QR Code"
+                        className="mx-auto w-48 h-48"
+                      />
+                    ) : (
+                      <>
+                        <QrCode className="h-16 w-16 text-gray-400 mx-auto mb-2" />
+                        <p className="text-sm text-gray-600">Generating QR code...</p>
+                      </>
+                    )}
                   </div>
-                  <Button variant="outline" className="w-full" disabled>
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={downloadQRCode}
+                    disabled={!qrCodeDataUrl}
+                  >
                     <Download className="h-4 w-4 mr-2" />
                     Download QR Code
                   </Button>
@@ -520,7 +578,7 @@ export default function BusinessOnboardingPage() {
 
   if (!businessData) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
           <p className="text-gray-600">Loading your business setup...</p>
@@ -530,7 +588,7 @@ export default function BusinessOnboardingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-50 p-4">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 p-4">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="text-center mb-8">
@@ -597,14 +655,5 @@ export default function BusinessOnboardingPage() {
         </Card>
       </div>
     </div>
-  )
-}
-
-// Helper component for labels since it's not imported
-function Label({ children, className = '', ...props }: any) {
-  return (
-    <label className={`text-sm font-medium text-gray-700 ${className}`} {...props}>
-      {children}
-    </label>
   )
 }

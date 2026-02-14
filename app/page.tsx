@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { isDemoMode as checkDemoMode } from "@/lib/supabase"
 import { generateLeaderboardData } from "@/lib/demo-data"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -28,19 +29,16 @@ import {
 import Link from "next/link"
 
 export default function HomePage() {
-  const [isDemoMode, setIsDemoMode] = useState(false)
   const [showPrivacyModal, setShowPrivacyModal] = useState(false)
   const [showTermsModal, setShowTermsModal] = useState(false)
   const [showDemoModal, setShowDemoModal] = useState(false)
   const [showLeaderboard, setShowLeaderboard] = useState(false)
   const [leaderboardData, setLeaderboardData] = useState<any[]>([])
+  const [contactSubmitted, setContactSubmitted] = useState(false)
+
+  const isDemoMode = checkDemoMode
 
   useEffect(() => {
-    // Check if we're in demo mode
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    setIsDemoMode(!supabaseUrl || supabaseUrl === "https://demo.supabase.co")
-
-    // Load leaderboard data
     const leaderboard = generateLeaderboardData()
     setLeaderboardData(leaderboard)
   }, [])
@@ -198,10 +196,10 @@ export default function HomePage() {
       <section className="max-w-6xl mx-auto px-4 py-16 text-center">
         <div className="max-w-3xl mx-auto">
           <h1 className="text-5xl font-bold text-gray-900 mb-6">
-            NFC-Powered Loyalty Programs That Make <span className="text-red-800">Customers Compete</span><br /> for Your Top Spot
+            In-Person Loyalty Program That Make <span className="text-red-800">Customers Compete</span><br /> for Your Top Spot
           </h1>
           <p className="text-xl text-gray-600 mb-8 leading-relaxed">
-            Transform your Blacksburg business with gamified loyalty programs featuring competitive leaderboards, 
+            Transform your business with gamified loyalty programs featuring competitive leaderboards, 
             NFC tap-to-earn technology, and real-time customer analytics. Perfect for Virginia Tech area businesses.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
@@ -221,7 +219,7 @@ export default function HomePage() {
             </Button>
           </div>
           <div className="mt-8 text-sm text-gray-500">
-            Proudly serving Blacksburg, Virginia Tech, and the New River Valley
+            Proudly serving Blacksburg, and the New River Valley
           </div>
         </div>
       </section>
@@ -235,7 +233,7 @@ export default function HomePage() {
               <h2 className="text-2xl font-bold text-gray-900">Try Risk-Free for 90 Days</h2>
             </div>
             <p className="text-lg text-gray-700 mb-6 leading-relaxed">
-              If you don't see at least <strong className="text-green-700">40% more visits from your top 10 customers</strong>, 
+              If you don't see <strong className="text-green-700">more visits from your top customers</strong>, 
               we'll refund every penny and let you keep the NFC tags.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
@@ -285,7 +283,7 @@ export default function HomePage() {
               </div>
               <h3 className="text-xl font-semibold text-gray-900 mb-2">Generic Rewards</h3>
               <p className="text-gray-600">
-                One-size-fits-all promotions don't excite anyone. Your loyal VT students want different rewards than local families.
+                One-size-fits-all promotions don't excite anyone. Find out if students want different rewards than local families.
               </p>
             </Card>
 
@@ -331,7 +329,7 @@ export default function HomePage() {
               </div>
               <h3 className="text-xl font-semibold text-gray-900 mb-2">Deep Customer Insights</h3>
               <p className="text-gray-600">
-                Discover what VT students order vs. locals, peak study hours, seasonal preferences. Make data-driven decisions about inventory and hours.
+                Discover what students order vs. locals, peak study hours, seasonal preferences. Make data-driven decisions about inventory and hours.
               </p>
             </Card>
 
@@ -450,7 +448,7 @@ export default function HomePage() {
         <div className="max-w-6xl mx-auto px-4">
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold text-gray-900 mb-4">
-              Built for the Virginia Tech Community
+              Built for the Blacksburg Community
             </h2>
             <p className="text-lg text-gray-600 max-w-2xl mx-auto">
               We understand Blacksburg's unique mix of students, faculty, and local families
@@ -518,7 +516,7 @@ export default function HomePage() {
             <div>
               <h3 className="text-2xl font-bold text-gray-900 mb-6">Our Story</h3>
               <p className="text-gray-600 mb-4">
-                Founded by Virginia Tech alumni who love Blacksburg, we saw local businesses struggling with outdated loyalty programs that didn't work for the modern customer - especially tech-savvy students.
+                Founded by locals love Blacksburg, we saw local businesses struggling with outdated loyalty programs that didn't work for the modern customer - especially tech-savvy students.
               </p>
               <p className="text-gray-600 mb-4">
                 We built TapRanked to bridge that gap, combining cutting-edge NFC technology with the personal touch that makes our community special.
@@ -829,7 +827,14 @@ export default function HomePage() {
 
             <Card className="p-6">
               <h3 className="text-xl font-semibold text-gray-900 mb-4">Schedule a Consultation</h3>
-              <form className="space-y-4">
+              {contactSubmitted ? (
+                <div className="text-center py-8">
+                  <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-4" />
+                  <h4 className="text-lg font-semibold text-gray-900 mb-2">Thanks, we'll be in touch!</h4>
+                  <p className="text-gray-600">We typically respond within 24 hours.</p>
+                </div>
+              ) : (
+              <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); setContactSubmitted(true); }}>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Business Name</label>
                   <input 
@@ -875,6 +880,7 @@ export default function HomePage() {
                   Request Consultation
                 </Button>
               </form>
+              )}
             </Card>
           </div>
         </div>
@@ -899,7 +905,7 @@ export default function HomePage() {
             <Button 
               variant="outline" 
               size="lg" 
-              className="border-white text-white hover:bg-white/10 px-8 py-4 text-lg"
+              className="border-white text-white bg-black hover:bg-white/10 px-8 py-4 text-lg"
               onClick={() => setShowDemoModal(true)}
             >
               See a Live Demo

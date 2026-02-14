@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -9,8 +9,6 @@ import { Progress } from "@/components/ui/progress"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { CreditCard, Gift, History, LogOut, Star, Trophy, Calendar, Zap, Crown, Settings } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
-import { supabase } from "@/lib/supabase"
-import { generateLeaderboardData, getBusinessLeaderboard, type LeaderboardEntry } from "@/lib/demo-data"
 
 interface PunchCard {
   id: string
@@ -30,6 +28,7 @@ interface Prize {
   description: string
   punches_required: number
   business_name: string
+  business_id: string
 }
 
 interface PunchHistory {
@@ -52,8 +51,18 @@ interface RedeemedPrize {
   }
 }
 
+interface LeaderboardEntry {
+  rank: number
+  user_id: string
+  display_name: string
+  total_punches: number
+  tier: string
+  badge?: string
+  businesses_visited?: number
+}
+
 export default function DashboardPage() {
-  const { user, logout, isLoading: authLoading } = useAuth()
+  const { user, logout, isLoading: authLoading, isDemoMode } = useAuth()
   const [punchCards, setPunchCards] = useState<PunchCard[]>([])
   const [availablePrizes, setAvailablePrizes] = useState<Prize[]>([])
   const [punchHistory, setPunchHistory] = useState<PunchHistory[]>([])
@@ -64,164 +73,153 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true)
   const router = useRouter()
 
-  const fetchUserData = async () => {
+  const fetchUserData = useCallback(async () => {
     if (!user) return
 
     setIsLoading(true)
     try {
-      // Check if this is a demo session
-      const isDemoSession = typeof window !== "undefined" && localStorage.getItem("demo_mode") === "true"
+      if (isDemoMode) {
+        // Demo mode: use local demo data
+        const { demoPunchCards, demoPrizes, demoPunches, generateLeaderboardData } = await import("@/lib/demo-data")
 
-      if (isDemoSession) {
-        console.log("Loading demo data for dashboard")
-        // Use demo data
-        const { demoPunchCards, demoPrizes, demoPunches } = await import("@/lib/demo-data")
-
-        // Load saved demo cards from localStorage first, then fallback to demo data
         let savedCards: any[] = []
         if (typeof window !== "undefined") {
           savedCards = JSON.parse(localStorage.getItem("demo_punch_cards") || "[]")
         }
 
-        // Merge saved cards with demo cards, prioritizing saved cards
         const userCards = demoPunchCards.filter((card) => card.user_id === user.id).map((card) => {
-          const savedCard = savedCards.find((c) => c.user_id === user.id && c.business_id === card.business_id)
+          const savedCard = savedCards.find((c: any) => c.user_id === user.id && c.business_id === card.business_id)
           return savedCard || card
         })
 
-        // Add any saved cards that don't exist in demo data
-        savedCards.forEach((savedCard) => {
-          if (savedCard.user_id === user.id && !userCards.find((c) => c.business_id === savedCard.business_id)) {
+        savedCards.forEach((savedCard: any) => {
+          if (savedCard.user_id === user.id && !userCards.find((c: any) => c.business_id === savedCard.business_id)) {
             userCards.push(savedCard)
           }
         })
 
         setPunchCards(userCards)
 
-        // Get available prizes for user's businesses
-        const userBusinessIds = userCards.map((card) => card.business_id)
-        const availablePrizes = demoPrizes
+        const userBusinessIds = userCards.map((card: any) => card.business_id)
+        const prizes = demoPrizes
           .filter((prize) => userBusinessIds.includes(prize.business_id))
           .map((prize) => ({
             ...prize,
-            business_name: userCards.find((card) => card.business_id === prize.business_id)?.business.name || "",
+            business_name: userCards.find((card: any) => card.business_id === prize.business_id)?.business?.name || "",
           }))
           .filter((prize) => {
-            const card = userCards.find((c) => c.business_id === prize.business_id)
+            const card = userCards.find((c: any) => c.business_id === prize.business_id)
             return card && card.current_punches >= prize.punches_required
           })
 
-        setAvailablePrizes(availablePrizes)
-
-        // Set punch history
-        const userPunches = demoPunches.filter((punch) => punch.user_id === user.id)
-        setPunchHistory(userPunches)
-
-        // No redeemed prizes in demo
+        setAvailablePrizes(prizes)
+        setPunchHistory(demoPunches.filter((punch) => punch.user_id === user.id))
         setRedeemedPrizes([])
 
-        // Load leaderboard data
         const leaderboard = generateLeaderboardData()
         setLeaderboardData(leaderboard)
 
-        // Load user leaderboard preferences
         const leaderboardSettings = JSON.parse(localStorage.getItem('leaderboard_settings') || '{}')
         const userSettings = leaderboardSettings[user.id] || {}
         setIsLeaderboardOptedIn(userSettings.opted_in || false)
         setUserDisplayName(userSettings.display_name || user.name)
+      } else {
+        // Real mode: fetch from API
+        const [cardsRes, leaderboardRes] = await Promise.all([
+          fetch("/api/punch-cards"),
+          fetch("/api/leaderboard?limit=10"),
+        ])
 
-        setIsLoading(false)
-        return
+        if (cardsRes.ok) {
+          const cardsData = await cardsRes.json()
+
+          // Transform punch cards
+          const cards = (cardsData.punch_cards || []).map((card: any) => {
+            const biz = card.businesses || card.business
+            return {
+              id: card.id,
+              current_punches: card.current_punches,
+              total_punches: card.total_punches,
+              business: {
+                id: biz?.id,
+                name: biz?.name || 'Unknown',
+                description: biz?.description || '',
+                max_punches: biz?.max_punches || 10,
+              },
+            }
+          })
+          setPunchCards(cards)
+
+          // Get available prizes for each business
+          const allPrizes: Prize[] = []
+          for (const card of cards) {
+            const prizesRes = await fetch(`/api/prizes?business_id=${card.business.id}`)
+            if (prizesRes.ok) {
+              const prizesData = await prizesRes.json()
+              const redeemable = (prizesData.prizes || [])
+                .filter((p: any) => card.current_punches >= p.punches_required)
+                .map((p: any) => ({
+                  ...p,
+                  business_name: card.business.name,
+                  business_id: card.business.id,
+                }))
+              allPrizes.push(...redeemable)
+            }
+          }
+          setAvailablePrizes(allPrizes)
+
+          // Transform punch history
+          const history = (cardsData.recent_punches || []).map((p: any) => ({
+            id: p.id,
+            created_at: p.created_at,
+            business: { name: p.businesses?.name || 'Unknown' },
+          }))
+          setPunchHistory(history)
+
+          // Transform redeemed prizes
+          const redeemed = (cardsData.redeemed_prizes || []).map((r: any) => ({
+            id: r.id,
+            redeemed_at: r.redeemed_at,
+            prize: { name: r.prizes?.name || 'Unknown', description: r.prizes?.description || '' },
+            business: { name: r.businesses?.name || 'Unknown' },
+          }))
+          setRedeemedPrizes(redeemed)
+        }
+
+        if (leaderboardRes.ok) {
+          const lbData = await leaderboardRes.json()
+          setLeaderboardData(lbData.leaderboard || [])
+        }
       }
-
-      // Real Supabase mode
-      console.log("Loading real data from Supabase")
-      const { data: cards } = await supabase
-        .from("punch_cards")
-        .select(`
-          id,
-          current_punches,
-          total_punches,
-          business:businesses(id, name, description, max_punches)
-        `)
-        .eq("user_id", user.id)
-        .order("updated_at", { ascending: false })
-
-      setPunchCards(cards || [])
-
-      // Fetch available prizes for user's businesses
-      if (cards && cards.length > 0) {
-        const prizesPromises = cards.map(async (card) => {
-          const { data: prizes } = await supabase
-            .from("prizes")
-            .select("id, name, description, punches_required")
-            .eq("business_id", card.business.id)
-            .eq("is_active", true)
-            .lte("punches_required", card.current_punches)
-
-          return (
-            prizes?.map((prize) => ({
-              ...prize,
-              business_name: card.business.name,
-            })) || []
-          )
-        })
-
-        const allPrizes = await Promise.all(prizesPromises)
-        setAvailablePrizes(allPrizes.flat())
-      }
-
-      // Fetch punch history
-      const { data: history } = await supabase
-        .from("punches")
-        .select(`
-          id,
-          created_at,
-          business:businesses(name)
-        `)
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false })
-        .limit(10)
-
-      setPunchHistory(history || [])
-
-      // Fetch redeemed prizes
-      const { data: redeemed } = await supabase
-        .from("redeemed_prizes")
-        .select(`
-          id,
-          redeemed_at,
-          prize:prizes(name, description),
-          business:businesses(name)
-        `)
-        .eq("user_id", user.id)
-        .order("redeemed_at", { ascending: false })
-        .limit(10)
-
-      setRedeemedPrizes(redeemed || [])
     } catch (error) {
       console.error("Error fetching user data:", error)
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [user, isDemoMode])
 
   const handleLogout = async () => {
     await logout()
     router.push("/")
   }
 
-  const redeemPrize = async (prizeId: string, businessId: string, punchCardId: string) => {
+  const redeemPrize = async (prizeId: string, businessId: string) => {
     try {
-      await supabase.from("redeemed_prizes").insert({
-        user_id: user!.id,
-        business_id: businessId,
-        prize_id: prizeId,
-        punch_card_id: punchCardId,
+      if (isDemoMode) {
+        // Demo mode: just refresh
+        fetchUserData()
+        return
+      }
+
+      const res = await fetch("/api/prizes/redeem", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prize_id: prizeId, business_id: businessId }),
       })
 
-      // Refresh data
-      fetchUserData()
+      if (res.ok) {
+        fetchUserData()
+      }
     } catch (error) {
       console.error("Error redeeming prize:", error)
     }
@@ -236,13 +234,9 @@ export default function DashboardPage() {
       display_name: displayName
     }
     localStorage.setItem('leaderboard_settings', JSON.stringify(leaderboardSettings))
-    
+
     setIsLeaderboardOptedIn(optedIn)
     setUserDisplayName(displayName)
-    
-    // Refresh leaderboard data
-    const leaderboard = generateLeaderboardData()
-    setLeaderboardData(leaderboard)
   }
 
   useEffect(() => {
@@ -254,13 +248,13 @@ export default function DashboardPage() {
     if (user) {
       fetchUserData()
     }
-  }, [user, authLoading, router])
+  }, [user, authLoading, router, fetchUserData])
 
   if (authLoading || isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
           <p className="text-gray-600">Loading your dashboard...</p>
         </div>
       </div>
@@ -271,8 +265,6 @@ export default function DashboardPage() {
     return null
   }
 
-  const isDemoSession = typeof window !== "undefined" && localStorage.getItem("demo_mode") === "true"
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 p-4">
       <div className="max-w-6xl mx-auto">
@@ -282,7 +274,7 @@ export default function DashboardPage() {
             <h1 className="text-3xl font-bold text-gray-900">Welcome back, {user.name}!</h1>
             <p className="text-gray-700">
               Manage your punch cards and rewards
-              {isDemoSession && <Badge className="ml-2 bg-amber-100 text-amber-800 border-amber-200">Demo Mode</Badge>}
+              {isDemoMode && <Badge className="ml-2 bg-amber-100 text-amber-800 border-amber-200">Demo Mode</Badge>}
             </p>
           </div>
           <div className="flex gap-4">
@@ -307,34 +299,19 @@ export default function DashboardPage() {
 
         <Tabs defaultValue="cards" className="space-y-6">
           <TabsList className="grid w-full grid-cols-5 bg-gray-100 p-1">
-            <TabsTrigger
-              value="cards"
-              className="data-[state=active]:bg-white data-[state=active]:text-gray-900 text-gray-600"
-            >
+            <TabsTrigger value="cards" className="data-[state=active]:bg-white data-[state=active]:text-gray-900 text-gray-600">
               My Cards
             </TabsTrigger>
-            <TabsTrigger
-              value="rewards"
-              className="data-[state=active]:bg-white data-[state=active]:text-gray-900 text-gray-600"
-            >
+            <TabsTrigger value="rewards" className="data-[state=active]:bg-white data-[state=active]:text-gray-900 text-gray-600">
               Available Rewards
             </TabsTrigger>
-            <TabsTrigger
-              value="leaderboard"
-              className="data-[state=active]:bg-white data-[state=active]:text-gray-900 text-gray-600"
-            >
+            <TabsTrigger value="leaderboard" className="data-[state=active]:bg-white data-[state=active]:text-gray-900 text-gray-600">
               Leaderboard
             </TabsTrigger>
-            <TabsTrigger
-              value="history"
-              className="data-[state=active]:bg-white data-[state=active]:text-gray-900 text-gray-600"
-            >
+            <TabsTrigger value="history" className="data-[state=active]:bg-white data-[state=active]:text-gray-900 text-gray-600">
               History
             </TabsTrigger>
-            <TabsTrigger
-              value="redeemed"
-              className="data-[state=active]:bg-white data-[state=active]:text-gray-900 text-gray-600"
-            >
+            <TabsTrigger value="redeemed" className="data-[state=active]:bg-white data-[state=active]:text-gray-900 text-gray-600">
               Redeemed
             </TabsTrigger>
           </TabsList>
@@ -371,7 +348,6 @@ export default function DashboardPage() {
                         </Badge>
                       </div>
 
-                      {/* Visual punch card */}
                       <div className="grid grid-cols-5 gap-1 mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
                         {Array.from({ length: card.business.max_punches }).map((_, index) => (
                           <div
@@ -429,12 +405,7 @@ export default function DashboardPage() {
                         <Button
                           size="sm"
                           className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                          onClick={() => {
-                            const card = punchCards.find((c) => c.business.name === prize.business_name)
-                            if (card) {
-                              redeemPrize(prize.id, card.business.id, card.id)
-                            }
-                          }}
+                          onClick={() => redeemPrize(prize.id, prize.business_id)}
                         >
                           Redeem Now
                         </Button>
@@ -448,7 +419,6 @@ export default function DashboardPage() {
 
           <TabsContent value="leaderboard">
             <div className="space-y-6">
-              {/* Leaderboard Settings */}
               <Card className="border-2 border-dashed border-gray-200">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -456,7 +426,7 @@ export default function DashboardPage() {
                     Leaderboard Settings
                   </CardTitle>
                   <CardDescription>
-                    Join the leaderboard to compete with other loyal customers and show off your achievements!
+                    Join the leaderboard to compete with other loyal customers!
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -464,8 +434,8 @@ export default function DashboardPage() {
                     <div>
                       <h4 className="font-semibold">Participate in Leaderboard</h4>
                       <p className="text-sm text-gray-600">
-                        {isLeaderboardOptedIn 
-                          ? "You're currently visible on the public leaderboard" 
+                        {isLeaderboardOptedIn
+                          ? "You're currently visible on the public leaderboard"
                           : "You're not participating in the leaderboard"}
                       </p>
                     </div>
@@ -476,7 +446,7 @@ export default function DashboardPage() {
                       {isLeaderboardOptedIn ? "Opt Out" : "Join Leaderboard"}
                     </Button>
                   </div>
-                  
+
                   {isLeaderboardOptedIn && (
                     <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
                       <h4 className="font-semibold mb-2">Display Name</h4>
@@ -495,15 +465,11 @@ export default function DashboardPage() {
                           Update
                         </Button>
                       </div>
-                      <p className="text-xs text-blue-600 mt-1">
-                        This is how your name will appear on the leaderboard
-                      </p>
                     </div>
                   )}
                 </CardContent>
               </Card>
 
-              {/* Global Leaderboard */}
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -548,9 +514,9 @@ export default function DashboardPage() {
                               </div>
                               <div className="flex items-center gap-4 text-sm text-gray-600">
                                 <span>{entry.total_punches} total punches</span>
-                                <span>{entry.businesses_visited} businesses</span>
-                                <Badge 
-                                  variant="secondary" 
+                                {entry.businesses_visited && <span>{entry.businesses_visited} businesses</span>}
+                                <Badge
+                                  variant="secondary"
                                   className={`text-xs ${
                                     entry.tier === 'platinum' ? 'bg-purple-100 text-purple-800' :
                                     entry.tier === 'gold' ? 'bg-yellow-100 text-yellow-800' :
@@ -580,7 +546,7 @@ export default function DashboardPage() {
                     <Crown className="h-12 w-12 text-yellow-500 mx-auto mb-4" />
                     <h3 className="text-lg font-semibold mb-2">Join the Competition!</h3>
                     <p className="text-gray-600 mb-4">
-                      Opt into the leaderboard to compete with other customers, earn badges, and show off your loyalty!
+                      Opt into the leaderboard to compete with other customers!
                     </p>
                     <Button onClick={() => updateLeaderboardSettings(true, user?.name || '')}>
                       <Crown className="h-4 w-4 mr-2" />
@@ -612,7 +578,7 @@ export default function DashboardPage() {
                     {punchHistory.map((punch) => (
                       <div key={punch.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                         <div className="flex items-center gap-3">
-                          <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
+                          <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
                           <div>
                             <p className="font-medium">{punch.business.name}</p>
                             <p className="text-sm text-gray-600 flex items-center gap-1">

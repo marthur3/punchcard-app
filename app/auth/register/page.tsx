@@ -2,8 +2,8 @@
 
 import type React from "react"
 
-import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { Suspense, useState } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -11,10 +11,17 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Eye, EyeOff, UserPlus, ArrowLeft } from "lucide-react"
-import { registerUser } from "@/lib/auth"
 import { useAuth } from "@/lib/auth-context"
 
 export default function RegisterPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div></div>}>
+      <RegisterContent />
+    </Suspense>
+  )
+}
+
+function RegisterContent() {
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -26,7 +33,9 @@ export default function RegisterPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
   const router = useRouter()
-  const { login } = useAuth()
+  const searchParams = useSearchParams()
+  const { register } = useAuth()
+  const redirect = searchParams.get("redirect") || "/dashboard"
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData((prev) => ({
@@ -52,11 +61,10 @@ export default function RegisterPage() {
       return
     }
 
-    const result = await registerUser(formData.email, formData.password, formData.name, formData.phone || undefined)
+    const result = await register(formData.email, formData.password, formData.name, formData.phone || undefined)
 
-    if (result.success && result.token) {
-      login(result.token)
-      router.push("/dashboard")
+    if (result.success) {
+      router.push(redirect)
     } else {
       setError(result.error || "Registration failed")
     }
@@ -65,7 +73,7 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="mb-6">
           <Link href="/" className="inline-flex items-center text-sm text-gray-600 hover:text-gray-900">
@@ -74,7 +82,7 @@ export default function RegisterPage() {
           </Link>
         </div>
 
-        <Card className="border-0 shadow-lg">
+        <Card className="border border-gray-200 shadow-sm bg-white">
           <CardHeader className="text-center">
             <CardTitle className="text-2xl font-bold">Create Account</CardTitle>
             <CardDescription>Join the digital punch card revolution</CardDescription>

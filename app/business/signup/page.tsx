@@ -188,10 +188,9 @@ export default function BusinessSignupPage() {
     try {
       // Generate unique NFC tag ID
       const nfcTagId = generateNfcTagId(formData.businessName)
-      
-      // In demo mode, store in localStorage
-      const isDemoMode = process.env.NEXT_PUBLIC_SUPABASE_URL === undefined ||
-                        process.env.NEXT_PUBLIC_SUPABASE_URL === "https://demo.supabase.co"
+
+      // Check if we're in demo mode
+      const { isDemoMode } = await import("@/lib/supabase")
 
       if (isDemoMode) {
         // Store business registration in localStorage
@@ -244,8 +243,37 @@ export default function BusinessSignupPage() {
         // Redirect to onboarding wizard
         router.push(`/business/onboarding?business_id=${businessData.id}&nfc_tag=${nfcTagId}`)
       } else {
-        // Real Supabase implementation would go here
-        console.log('Real registration would happen here with Supabase')
+        // Real mode: call API
+        const res = await fetch('/api/business/signup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            business_name: formData.businessName,
+            business_description: formData.businessDescription,
+            business_type: formData.businessType,
+            business_phone: formData.phone,
+            business_website: formData.website,
+            address: formData.address,
+            city: formData.city,
+            state: formData.state,
+            zip: formData.zipCode,
+            admin_name: formData.adminName,
+            admin_email: formData.adminEmail,
+            admin_password: formData.adminPassword,
+            max_punches: formData.maxPunches,
+            default_reward: formData.defaultReward,
+            reward_description: formData.rewardDescription,
+          }),
+        })
+
+        const data = await res.json()
+
+        if (!res.ok) {
+          setErrors({ submit: data.error || 'Registration failed' })
+          return
+        }
+
+        router.push(`/business/onboarding?business_id=${data.business.id}&nfc_tag=${data.business.nfc_tag_id}`)
       }
     } catch (error) {
       console.error('Registration error:', error)
@@ -586,7 +614,7 @@ export default function BusinessSignupPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-50 p-4">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 p-4">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="text-center mb-8">
