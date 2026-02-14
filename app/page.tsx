@@ -173,8 +173,8 @@ export default function HomePage() {
             <Link href="/auth/login" className="text-gray-600 hover:text-red-800 font-medium">
               Customer Login
             </Link>
-            <Link href="/business">
-              <Button variant="outline" className="border-red-300 text-red-800 hover:bg-red-50">Business Portal</Button>
+            <Link href="/business/login">
+              <Button variant="outline" className="border-red-300 text-red-800 hover:bg-red-50">Business Login</Button>
             </Link>
           </div>
         </div>

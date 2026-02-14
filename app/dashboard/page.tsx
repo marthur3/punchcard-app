@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { CreditCard, Gift, History, LogOut, Star, Trophy, Calendar, Zap, Crown, Settings } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { CreditCard, Gift, History, LogOut, Star, Trophy, Calendar, Zap, Crown, Settings, CheckCircle } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 
 interface PunchCard {
@@ -71,6 +72,7 @@ export default function DashboardPage() {
   const [isLeaderboardOptedIn, setIsLeaderboardOptedIn] = useState(false)
   const [userDisplayName, setUserDisplayName] = useState('')
   const [isLoading, setIsLoading] = useState(true)
+  const [redeemSuccess, setRedeemSuccess] = useState("")
   const router = useRouter()
 
   const fetchUserData = useCallback(async () => {
@@ -114,7 +116,10 @@ export default function DashboardPage() {
 
         setAvailablePrizes(prizes)
         setPunchHistory(demoPunches.filter((punch) => punch.user_id === user.id))
-        setRedeemedPrizes([])
+
+        const savedRedeemed = JSON.parse(localStorage.getItem("demo_redeemed_prizes") || "[]")
+        const userRedeemed = savedRedeemed.filter((r: any) => r.user_id === user.id)
+        setRedeemedPrizes(userRedeemed)
 
         const leaderboard = generateLeaderboardData()
         setLeaderboardData(leaderboard)
@@ -206,7 +211,33 @@ export default function DashboardPage() {
   const redeemPrize = async (prizeId: string, businessId: string) => {
     try {
       if (isDemoMode) {
-        // Demo mode: just refresh
+        // Demo mode: deduct punches, record redemption, show success
+        const prize = availablePrizes.find(p => p.id === prizeId)
+        if (!prize || !user) return
+
+        // Deduct punches from the card
+        const savedCards = JSON.parse(localStorage.getItem("demo_punch_cards") || "[]")
+        const cardIndex = savedCards.findIndex((c: any) => c.user_id === user.id && c.business_id === businessId)
+        if (cardIndex >= 0) {
+          savedCards[cardIndex].current_punches = Math.max(0, savedCards[cardIndex].current_punches - prize.punches_required)
+          localStorage.setItem("demo_punch_cards", JSON.stringify(savedCards))
+        }
+
+        // Record redemption
+        const redeemed = JSON.parse(localStorage.getItem("demo_redeemed_prizes") || "[]")
+        redeemed.push({
+          id: `redeemed-${Date.now()}`,
+          prize_id: prizeId,
+          business_id: businessId,
+          user_id: user.id,
+          redeemed_at: new Date().toISOString(),
+          prize: { name: prize.name, description: prize.description },
+          business: { name: prize.business_name },
+        })
+        localStorage.setItem("demo_redeemed_prizes", JSON.stringify(redeemed))
+
+        setRedeemSuccess(`${prize.name} redeemed!`)
+        setTimeout(() => setRedeemSuccess(""), 3000)
         fetchUserData()
         return
       }
@@ -377,6 +408,12 @@ export default function DashboardPage() {
           </TabsContent>
 
           <TabsContent value="rewards">
+            {redeemSuccess && (
+              <Alert className="mb-4 border-green-200 bg-green-50">
+                <CheckCircle className="h-4 w-4 text-green-600" />
+                <AlertDescription className="text-green-800">{redeemSuccess}</AlertDescription>
+              </Alert>
+            )}
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
               {availablePrizes.length === 0 ? (
                 <Card className="col-span-full">

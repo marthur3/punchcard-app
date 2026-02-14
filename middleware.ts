@@ -18,6 +18,7 @@ const PUBLIC_ROUTES = [
   '/tap',
   '/business/signup',
   '/business/onboarding',
+  '/business/login',
 ];
 
 export function middleware(request: NextRequest) {
@@ -66,9 +67,8 @@ export function middleware(request: NextRequest) {
   if (isProtectedAdmin) {
     const adminToken = request.cookies.get('admin_token');
     if (!adminToken?.value) {
-      const loginUrl = new URL('/auth/login', request.url);
+      const loginUrl = new URL('/business/login', request.url);
       loginUrl.searchParams.set('redirect', pathname);
-      loginUrl.searchParams.set('type', 'business');
       return NextResponse.redirect(loginUrl);
     }
   }

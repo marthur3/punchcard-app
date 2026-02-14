@@ -114,6 +114,7 @@ export default function BusinessSignupPage() {
   const [currentStep, setCurrentStep] = useState(1)
   const [formData, setFormData] = useState<BusinessFormData>(initialFormData)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [showSuccess, setShowSuccess] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const router = useRouter()
 
@@ -240,8 +241,12 @@ export default function BusinessSignupPage() {
           nfc_tag_id: nfcTagId
         }))
 
-        // Redirect to onboarding wizard
-        router.push(`/business/onboarding?business_id=${businessData.id}&nfc_tag=${nfcTagId}`)
+        // Show success then redirect to onboarding wizard
+        setShowSuccess(true)
+        setTimeout(() => {
+          router.push(`/business/onboarding?business_id=${businessData.id}&nfc_tag=${nfcTagId}`)
+        }, 2000)
+        return
       } else {
         // Real mode: call API
         const res = await fetch('/api/business/signup', {
@@ -273,7 +278,10 @@ export default function BusinessSignupPage() {
           return
         }
 
-        router.push(`/business/onboarding?business_id=${data.business.id}&nfc_tag=${data.business.nfc_tag_id}`)
+        setShowSuccess(true)
+        setTimeout(() => {
+          router.push(`/business/onboarding?business_id=${data.business.id}&nfc_tag=${data.business.nfc_tag_id}`)
+        }, 2000)
       }
     } catch (error) {
       console.error('Registration error:', error)
@@ -611,6 +619,25 @@ export default function BusinessSignupPage() {
       default:
         return null
     }
+  }
+
+  if (showSuccess) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 flex items-center justify-center p-4">
+        <Card className="max-w-md w-full text-center">
+          <CardContent className="p-8">
+            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <CheckCircle className="h-8 w-8 text-green-600" />
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Registration Complete!</h2>
+            <p className="text-gray-600 mb-4">
+              Your business <strong>{formData.businessName}</strong> has been registered successfully.
+            </p>
+            <p className="text-sm text-gray-500">Redirecting to setup wizard...</p>
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   return (

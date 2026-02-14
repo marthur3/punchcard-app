@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -16,9 +16,10 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { Store, Gift, Users, TrendingUp, Plus, Edit, CheckCircle, Trophy } from "lucide-react"
+import { Store, Gift, Users, TrendingUp, Plus, Edit, CheckCircle, Trophy, LogOut, RefreshCw } from "lucide-react"
 import { isDemoMode } from "@/lib/supabase"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 
 interface LeaderboardEntry {
   rank: number
@@ -66,6 +67,12 @@ export default function BusinessDashboard() {
     description: "",
     punches_required: 5,
   })
+  const [editingPrize, setEditingPrize] = useState<Prize | null>(null)
+  const [editPrizeData, setEditPrizeData] = useState({ name: "", description: "", punches_required: 5 })
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
+  const [activeTab, setActiveTab] = useState("analytics")
+  const pollingRef = useRef<NodeJS.Timeout | null>(null)
+  const router = useRouter()
 
   const fetchBusinesses = async () => {
     if (isDemoMode) {
@@ -145,10 +152,13 @@ export default function BusinessDashboard() {
         const activeUsers = Math.max(businessCards.length, businessSavedCards.length)
         const avgPunchesPerUser = activeUsers > 0 ? totalPunches / activeUsers : 0
 
+        const redeemedPrizes = JSON.parse(localStorage.getItem("demo_redeemed_prizes") || "[]")
+        const businessRedeemed = redeemedPrizes.filter((r: any) => r.business_id === businessId)
+
         setAnalytics({
           totalPunches,
           activeUsers,
-          prizesRedeemed: 2,
+          prizesRedeemed: businessRedeemed.length,
           avgPunchesPerUser: Math.round(avgPunchesPerUser * 10) / 10,
         })
 
@@ -182,6 +192,7 @@ export default function BusinessDashboard() {
           setGlobalLeaderboard(data.leaderboard || [])
         }
       }
+      setLastUpdated(new Date())
     } catch (error) {
       console.error("Error fetching analytics:", error)
     } finally {
@@ -251,7 +262,25 @@ export default function BusinessDashboard() {
     }
   }
 
+  const handleAdminLogout = async () => {
+    try {
+      await fetch("/api/auth/admin-logout", { method: "POST" })
+    } catch {}
+    if (isDemoMode) {
+      localStorage.removeItem("business_admin_session")
+    }
+    router.push("/business/login")
+  }
+
   useEffect(() => {
+    // Auth check: if demo mode and no admin session, redirect to login
+    if (isDemoMode) {
+      const session = localStorage.getItem("business_admin_session")
+      if (!session) {
+        router.push("/business/login")
+        return
+      }
+    }
     fetchBusinesses()
   }, [])
 
@@ -262,6 +291,18 @@ export default function BusinessDashboard() {
     }
   }, [selectedBusiness])
 
+  // 30-second polling when analytics tab is active
+  useEffect(() => {
+    if (activeTab === "analytics" && selectedBusiness) {
+      pollingRef.current = setInterval(() => {
+        fetchAnalytics(selectedBusiness.id)
+      }, 30000)
+    }
+    return () => {
+      if (pollingRef.current) clearInterval(pollingRef.current)
+    }
+  }, [activeTab, selectedBusiness])
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 p-4">
       <div className="max-w-6xl mx-auto">
@@ -270,9 +311,15 @@ export default function BusinessDashboard() {
             <h1 className="text-3xl font-bold text-gray-900">Business Dashboard</h1>
             <p className="text-gray-600">Manage your digital punch card program</p>
           </div>
-          <Link href="/">
-            <Button variant="outline">Back to Home</Button>
-          </Link>
+          <div className="flex gap-3">
+            <Link href="/">
+              <Button variant="outline">Back to Home</Button>
+            </Link>
+            <Button variant="outline" onClick={handleAdminLogout} className="text-red-700 border-red-300 hover:bg-red-50">
+              <LogOut className="h-4 w-4 mr-2" />
+              Logout
+            </Button>
+          </div>
         </div>
 
         {/* Business Selection */}
@@ -305,7 +352,7 @@ export default function BusinessDashboard() {
         </Card>
 
         {selectedBusiness && (
-          <Tabs defaultValue="analytics" className="space-y-6">
+          <Tabs defaultValue="analytics" className="space-y-6" onValueChange={setActiveTab}>
             <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="analytics">Analytics</TabsTrigger>
               <TabsTrigger value="leaderboard">Leaderboard</TabsTrigger>
@@ -314,6 +361,20 @@ export default function BusinessDashboard() {
             </TabsList>
 
             <TabsContent value="analytics">
+              <div className="flex justify-between items-center mb-4">
+                <div className="text-sm text-gray-500">
+                  {lastUpdated && `Last updated: ${lastUpdated.toLocaleTimeString()}`}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => selectedBusiness && fetchAnalytics(selectedBusiness.id)}
+                  disabled={isLoading}
+                >
+                  <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+                  Refresh
+                </Button>
+              </div>
               <div className="grid md:grid-cols-4 gap-4 mb-6">
                 <Card>
                   <CardContent className="p-6">
@@ -596,7 +657,10 @@ export default function BusinessDashboard() {
                           >
                             {prize.is_active ? "Deactivate" : "Activate"}
                           </Button>
-                          <Button size="sm" variant="outline">
+                          <Button size="sm" variant="outline" onClick={() => {
+                            setEditingPrize(prize)
+                            setEditPrizeData({ name: prize.name, description: prize.description, punches_required: prize.punches_required })
+                          }}>
                             <Edit className="h-4 w-4" />
                           </Button>
                         </div>
@@ -605,6 +669,65 @@ export default function BusinessDashboard() {
                   </CardContent>
                 </Card>
 
+                {/* Edit Prize Dialog */}
+                <Dialog open={!!editingPrize} onOpenChange={(open) => { if (!open) setEditingPrize(null) }}>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Edit Prize</DialogTitle>
+                      <DialogDescription>Update this reward</DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <div>
+                        <Label htmlFor="edit-prize-name">Prize Name</Label>
+                        <Input
+                          id="edit-prize-name"
+                          value={editPrizeData.name}
+                          onChange={(e) => setEditPrizeData({ ...editPrizeData, name: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="edit-prize-description">Description</Label>
+                        <Textarea
+                          id="edit-prize-description"
+                          value={editPrizeData.description}
+                          onChange={(e) => setEditPrizeData({ ...editPrizeData, description: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="edit-punches-required">Punches Required</Label>
+                        <Input
+                          id="edit-punches-required"
+                          type="number"
+                          min="1"
+                          value={editPrizeData.punches_required}
+                          onChange={(e) => setEditPrizeData({ ...editPrizeData, punches_required: Number.parseInt(e.target.value) })}
+                        />
+                      </div>
+                      <Button onClick={async () => {
+                        if (!editingPrize) return
+                        const updated = { ...editingPrize, ...editPrizeData }
+                        if (isDemoMode) {
+                          const registeredPrizes = JSON.parse(localStorage.getItem('demo_registered_prizes') || '[]')
+                          const idx = registeredPrizes.findIndex((p: any) => p.id === editingPrize.id)
+                          if (idx >= 0) {
+                            registeredPrizes[idx] = { ...registeredPrizes[idx], ...editPrizeData }
+                            localStorage.setItem('demo_registered_prizes', JSON.stringify(registeredPrizes))
+                          }
+                        } else {
+                          await fetch("/api/business/prizes", {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ id: editingPrize.id, ...editPrizeData }),
+                          })
+                        }
+                        setPrizes(prizes.map(p => p.id === editingPrize.id ? updated : p))
+                        setEditingPrize(null)
+                      }} className="w-full">
+                        Save Changes
+                      </Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
               </div>
             </TabsContent>
 
