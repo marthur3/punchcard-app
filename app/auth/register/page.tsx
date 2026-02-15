@@ -64,7 +64,8 @@ function RegisterContent() {
     const result = await register(formData.email, formData.password, formData.name, formData.phone || undefined)
 
     if (result.success) {
-      router.push(redirect)
+      const separator = redirect.includes("?") ? "&" : "?"
+      router.push(`${redirect}${separator}welcome=true`)
     } else {
       setError(result.error || "Registration failed")
     }

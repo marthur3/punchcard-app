@@ -14,7 +14,6 @@ import {
   User, 
   Mail, 
   Phone, 
-  MapPin, 
   Gift, 
   ArrowRight, 
   ArrowLeft, 
@@ -30,10 +29,6 @@ interface BusinessFormData {
   businessName: string
   businessDescription: string
   businessType: string
-  address: string
-  city: string
-  state: string
-  zipCode: string
   phone: string
   website: string
   
@@ -56,10 +51,6 @@ const initialFormData: BusinessFormData = {
   businessName: '',
   businessDescription: '',
   businessType: '',
-  address: '',
-  city: '',
-  state: '',
-  zipCode: '',
   phone: '',
   website: '',
   adminName: '',
@@ -118,7 +109,7 @@ export default function BusinessSignupPage() {
   const [errors, setErrors] = useState<Record<string, string>>({})
   const router = useRouter()
 
-  const totalSteps = 5
+  const totalSteps = 4
   const progress = (currentStep / totalSteps) * 100
 
   const updateFormData = (updates: Partial<BusinessFormData>) => {
@@ -142,15 +133,8 @@ export default function BusinessSignupPage() {
         if (!formData.businessType.trim()) newErrors.businessType = 'Business type is required'
         if (!formData.phone.trim()) newErrors.phone = 'Phone number is required'
         break
-        
-      case 2: // Location
-        if (!formData.address.trim()) newErrors.address = 'Address is required'
-        if (!formData.city.trim()) newErrors.city = 'City is required'
-        if (!formData.state.trim()) newErrors.state = 'State is required'
-        if (!formData.zipCode.trim()) newErrors.zipCode = 'ZIP code is required'
-        break
-        
-      case 3: // Admin Account
+
+      case 2: // Admin Account
         if (!formData.adminName.trim()) newErrors.adminName = 'Admin name is required'
         if (!formData.adminEmail.trim()) newErrors.adminEmail = 'Email is required'
         if (!/\S+@\S+\.\S+/.test(formData.adminEmail)) newErrors.adminEmail = 'Valid email is required'
@@ -205,7 +189,6 @@ export default function BusinessSignupPage() {
           updated_at: new Date().toISOString(),
           admin_email: formData.adminEmail,
           admin_name: formData.adminName,
-          address: `${formData.address}, ${formData.city}, ${formData.state} ${formData.zipCode}`,
           phone: formData.phone,
           website: formData.website,
           plan: formData.selectedPlan
@@ -258,10 +241,6 @@ export default function BusinessSignupPage() {
             business_type: formData.businessType,
             business_phone: formData.phone,
             business_website: formData.website,
-            address: formData.address,
-            city: formData.city,
-            state: formData.state,
-            zip: formData.zipCode,
             admin_name: formData.adminName,
             admin_email: formData.adminEmail,
             admin_password: formData.adminPassword,
@@ -369,69 +348,6 @@ export default function BusinessSignupPage() {
         return (
           <div className="space-y-6">
             <div className="text-center mb-6">
-              <MapPin className="h-12 w-12 text-blue-600 mx-auto mb-4" />
-              <h2 className="text-2xl font-bold text-gray-900">Where are you located?</h2>
-              <p className="text-gray-600">This helps customers find you and enables local features</p>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="address">Street Address *</Label>
-                <Input
-                  id="address"
-                  value={formData.address}
-                  onChange={(e) => updateFormData({ address: e.target.value })}
-                  placeholder="123 Main Street"
-                  className={errors.address ? 'border-red-500' : ''}
-                />
-                {errors.address && <p className="text-sm text-red-600">{errors.address}</p>}
-              </div>
-
-              <div className="grid md:grid-cols-3 gap-4">
-                <div>
-                  <Label htmlFor="city">City *</Label>
-                  <Input
-                    id="city"
-                    value={formData.city}
-                    onChange={(e) => updateFormData({ city: e.target.value })}
-                    placeholder="San Francisco"
-                    className={errors.city ? 'border-red-500' : ''}
-                  />
-                  {errors.city && <p className="text-sm text-red-600">{errors.city}</p>}
-                </div>
-
-                <div>
-                  <Label htmlFor="state">State *</Label>
-                  <Input
-                    id="state"
-                    value={formData.state}
-                    onChange={(e) => updateFormData({ state: e.target.value })}
-                    placeholder="CA"
-                    className={errors.state ? 'border-red-500' : ''}
-                  />
-                  {errors.state && <p className="text-sm text-red-600">{errors.state}</p>}
-                </div>
-
-                <div>
-                  <Label htmlFor="zipCode">ZIP Code *</Label>
-                  <Input
-                    id="zipCode"
-                    value={formData.zipCode}
-                    onChange={(e) => updateFormData({ zipCode: e.target.value })}
-                    placeholder="94101"
-                    className={errors.zipCode ? 'border-red-500' : ''}
-                  />
-                  {errors.zipCode && <p className="text-sm text-red-600">{errors.zipCode}</p>}
-                </div>
-              </div>
-            </div>
-          </div>
-        )
-
-      case 3:
-        return (
-          <div className="space-y-6">
-            <div className="text-center mb-6">
               <User className="h-12 w-12 text-blue-600 mx-auto mb-4" />
               <h2 className="text-2xl font-bold text-gray-900">Create your admin account</h2>
               <p className="text-gray-600">This account will manage your business dashboard and settings</p>
@@ -496,7 +412,7 @@ export default function BusinessSignupPage() {
           </div>
         )
 
-      case 4:
+      case 3:
         return (
           <div className="space-y-6">
             <div className="text-center mb-6">
@@ -570,7 +486,7 @@ export default function BusinessSignupPage() {
           </div>
         )
 
-      case 5:
+      case 4:
         return (
           <div className="space-y-6">
             <div className="text-center mb-6">

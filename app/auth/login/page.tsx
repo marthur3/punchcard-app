@@ -29,7 +29,7 @@ function LoginContent() {
   const [error, setError] = useState("")
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { login } = useAuth()
+  const { login, isDemoMode } = useAuth()
 
   const redirect = searchParams.get("redirect") || "/dashboard"
 
@@ -156,22 +156,24 @@ function LoginContent() {
               </p>
             </div>
 
-            <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
-              <div className="flex justify-between items-center mb-2">
-                <p className="text-sm font-medium text-blue-900">Demo Account</p>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={fillDemoCredentials}
-                  className="text-xs bg-white border-blue-300 text-blue-700 hover:bg-blue-50"
-                >
-                  Use Demo
-                </Button>
+            {isDemoMode && (
+              <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                <div className="flex justify-between items-center mb-2">
+                  <p className="text-sm font-medium text-blue-900">Demo Account</p>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={fillDemoCredentials}
+                    className="text-xs bg-white border-blue-300 text-blue-700 hover:bg-blue-50"
+                  >
+                    Use Demo
+                  </Button>
+                </div>
+                <p className="text-xs text-blue-800">Email: demo@example.com</p>
+                <p className="text-xs text-blue-800">Password: demo123</p>
               </div>
-              <p className="text-xs text-blue-800">Email: demo@example.com</p>
-              <p className="text-xs text-blue-800">Password: demo123</p>
-            </div>
+            )}
           </CardContent>
         </Card>
       </div>

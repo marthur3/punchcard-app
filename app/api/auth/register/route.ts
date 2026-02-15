@@ -2,9 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { registerSchema } from '@/lib/validations';
 import { hashPassword, generateSessionToken, setCustomerSession } from '@/lib/auth/server';
 import { getSupabaseServer } from '@/lib/supabase';
+import { checkRateLimit, getClientIP } from '@/lib/rate-limit';
 
 export async function POST(request: NextRequest) {
   try {
+    const rateLimited = checkRateLimit(request, `register:${getClientIP(request)}`, 3, 15 * 60 * 1000);
+    if (rateLimited) return rateLimited;
+
     const body = await request.json();
     const parsed = registerSchema.safeParse(body);
 

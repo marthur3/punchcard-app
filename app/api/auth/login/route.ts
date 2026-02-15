@@ -3,9 +3,13 @@ import { loginSchema } from '@/lib/validations';
 import { verifyPassword, generateSessionToken, setCustomerSession } from '@/lib/auth/server';
 import { getSupabaseServer, isDemoMode } from '@/lib/supabase';
 import { demoUsers } from '@/lib/demo-data';
+import { checkRateLimit, getClientIP } from '@/lib/rate-limit';
 
 export async function POST(request: NextRequest) {
   try {
+    const rateLimited = checkRateLimit(request, `login:${getClientIP(request)}`, 5, 15 * 60 * 1000);
+    if (rateLimited) return rateLimited;
+
     const body = await request.json();
     const parsed = loginSchema.safeParse(body);
 

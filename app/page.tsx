@@ -170,6 +170,9 @@ export default function HomePage() {
             >
               Demo
             </button>
+            <Link href="/auth/register" className="text-gray-600 hover:text-red-800 font-medium">
+              Sign Up
+            </Link>
             <Link href="/auth/login" className="text-gray-600 hover:text-red-800 font-medium">
               Customer Login
             </Link>

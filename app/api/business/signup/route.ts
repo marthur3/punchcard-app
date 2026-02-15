@@ -2,9 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { businessSignupSchema } from '@/lib/validations';
 import { hashPassword, generateSessionToken, setAdminSession } from '@/lib/auth/server';
 import { getSupabaseServer, isDemoMode } from '@/lib/supabase';
+import { checkRateLimit, getClientIP } from '@/lib/rate-limit';
 
 export async function POST(request: NextRequest) {
   try {
+    const rateLimited = checkRateLimit(request, `biz-signup:${getClientIP(request)}`, 3, 60 * 60 * 1000);
+    if (rateLimited) return rateLimited;
+
     if (isDemoMode) {
       return NextResponse.json(
         { error: 'Business signup not available in demo mode' },

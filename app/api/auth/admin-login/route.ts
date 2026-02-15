@@ -2,9 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminLoginSchema } from '@/lib/validations';
 import { verifyPassword, generateSessionToken, setAdminSession } from '@/lib/auth/server';
 import { getSupabaseServer, isDemoMode } from '@/lib/supabase';
+import { checkRateLimit, getClientIP } from '@/lib/rate-limit';
 
 export async function POST(request: NextRequest) {
   try {
+    const rateLimited = checkRateLimit(request, `admin-login:${getClientIP(request)}`, 5, 15 * 60 * 1000);
+    if (rateLimited) return rateLimited;
+
     const body = await request.json();
     const parsed = adminLoginSchema.safeParse(body);
 

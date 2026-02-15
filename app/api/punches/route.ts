@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { collectPunchSchema } from '@/lib/validations';
 import { getCurrentCustomer } from '@/lib/auth/server';
 import { getSupabaseServer, isDemoMode } from '@/lib/supabase';
+import { checkRateLimit, getClientIP } from '@/lib/rate-limit';
 
 export async function POST(request: NextRequest) {
   try {
@@ -32,6 +33,9 @@ export async function POST(request: NextRequest) {
         { status: 401 }
       );
     }
+
+    const rateLimited = checkRateLimit(request, `punch:${getClientIP(request)}:${user.id}`, 10, 60 * 1000);
+    if (rateLimited) return rateLimited;
 
     const db = getSupabaseServer();
 

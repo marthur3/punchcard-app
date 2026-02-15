@@ -1,15 +1,16 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
-import { useRouter } from "next/navigation"
+import { Suspense, useState, useEffect, useCallback } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { CreditCard, Gift, History, LogOut, Star, Trophy, Calendar, Zap, Crown, Settings, CheckCircle } from "lucide-react"
+import { CreditCard, Gift, History, LogOut, Star, Trophy, Calendar, Zap, Crown, Settings, CheckCircle, X } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
+import Link from "next/link"
 
 interface PunchCard {
   id: string
@@ -63,6 +64,14 @@ interface LeaderboardEntry {
 }
 
 export default function DashboardPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div></div>}>
+      <DashboardContent />
+    </Suspense>
+  )
+}
+
+function DashboardContent() {
   const { user, logout, isLoading: authLoading, isDemoMode } = useAuth()
   const [punchCards, setPunchCards] = useState<PunchCard[]>([])
   const [availablePrizes, setAvailablePrizes] = useState<Prize[]>([])
@@ -73,7 +82,10 @@ export default function DashboardPage() {
   const [userDisplayName, setUserDisplayName] = useState('')
   const [isLoading, setIsLoading] = useState(true)
   const [redeemSuccess, setRedeemSuccess] = useState("")
+  const [showWelcome, setShowWelcome] = useState(false)
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const welcome = searchParams?.get("welcome")
 
   const fetchUserData = useCallback(async () => {
     if (!user) return
@@ -82,7 +94,17 @@ export default function DashboardPage() {
     try {
       if (isDemoMode) {
         // Demo mode: use local demo data
-        const { demoPunchCards, demoPrizes, demoPunches, generateLeaderboardData } = await import("@/lib/demo-data")
+        const { demoPunchCards, demoPrizes, demoPunches, generateLeaderboardData, demoBusinesses } = await import("@/lib/demo-data")
+
+        // Load registered businesses and prizes from localStorage
+        const registeredBusinesses = typeof window !== "undefined"
+          ? JSON.parse(localStorage.getItem("demo_registered_businesses") || "[]")
+          : []
+        const registeredPrizes = typeof window !== "undefined"
+          ? JSON.parse(localStorage.getItem("demo_registered_prizes") || "[]")
+          : []
+        const allBusinesses = [...demoBusinesses, ...registeredBusinesses]
+        const allPrizes = [...demoPrizes, ...registeredPrizes]
 
         let savedCards: any[] = []
         if (typeof window !== "undefined") {
@@ -100,17 +122,27 @@ export default function DashboardPage() {
           }
         })
 
-        setPunchCards(userCards)
+        // Enrich cards with business info from both demo and registered businesses
+        const enrichedCards = userCards.map((card: any) => {
+          if (card.business?.name) return card
+          const biz = allBusinesses.find((b: any) => b.id === card.business_id)
+          return {
+            ...card,
+            business: biz ? { id: biz.id, name: biz.name, description: biz.description, max_punches: biz.max_punches } : card.business,
+          }
+        })
 
-        const userBusinessIds = userCards.map((card: any) => card.business_id)
-        const prizes = demoPrizes
+        setPunchCards(enrichedCards)
+
+        const userBusinessIds = enrichedCards.map((card: any) => card.business_id)
+        const prizes = allPrizes
           .filter((prize) => userBusinessIds.includes(prize.business_id))
           .map((prize) => ({
             ...prize,
-            business_name: userCards.find((card: any) => card.business_id === prize.business_id)?.business?.name || "",
+            business_name: enrichedCards.find((card: any) => card.business_id === prize.business_id)?.business?.name || "",
           }))
           .filter((prize) => {
-            const card = userCards.find((c: any) => c.business_id === prize.business_id)
+            const card = enrichedCards.find((c: any) => c.business_id === prize.business_id)
             return card && card.current_punches >= prize.punches_required
           })
 
@@ -271,6 +303,12 @@ export default function DashboardPage() {
   }
 
   useEffect(() => {
+    if (welcome === "true") {
+      setShowWelcome(true)
+    }
+  }, [welcome])
+
+  useEffect(() => {
     if (!authLoading && !user) {
       router.push("/auth/login")
       return
@@ -327,6 +365,44 @@ export default function DashboardPage() {
             </Button>
           </div>
         </div>
+
+        {showWelcome && (
+          <Card className="mb-6 border border-green-200 shadow-sm bg-green-50">
+            <CardContent className="pt-6">
+              <div className="flex items-start justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold text-green-900 mb-2">Welcome to TapRanked!</h3>
+                  <p className="text-sm text-green-700 mb-4">Here's how to get started:</p>
+                  <ol className="space-y-2 text-sm text-green-800">
+                    <li className="flex items-center gap-2">
+                      <CheckCircle className="h-4 w-4 text-green-600 flex-shrink-0" />
+                      Visit a participating business and tap their NFC tag
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <CheckCircle className="h-4 w-4 text-green-600 flex-shrink-0" />
+                      Collect punches with every visit
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <CheckCircle className="h-4 w-4 text-green-600 flex-shrink-0" />
+                      Earn rewards and climb the leaderboard
+                    </li>
+                  </ol>
+                  <Button
+                    size="sm"
+                    className="mt-4 bg-green-600 hover:bg-green-700 text-white"
+                    onClick={() => router.push("/tap")}
+                  >
+                    <Zap className="h-4 w-4 mr-2" />
+                    Find NFC Locations
+                  </Button>
+                </div>
+                <button onClick={() => setShowWelcome(false)} className="text-green-600 hover:text-green-800">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <Tabs defaultValue="cards" className="space-y-6">
           <TabsList className="grid w-full grid-cols-5 bg-gray-100 p-1">
@@ -400,6 +476,14 @@ export default function DashboardPage() {
                           Card Complete!
                         </Badge>
                       )}
+
+                      <Link
+                        href={`/leaderboard/${card.business.id}`}
+                        className="block text-center text-xs text-orange-600 hover:text-orange-700 font-medium mt-3"
+                      >
+                        <Trophy className="h-3 w-3 inline mr-1" />
+                        View Rankings
+                      </Link>
                     </CardContent>
                   </Card>
                 ))

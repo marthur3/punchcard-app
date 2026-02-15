@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Wifi, Gift, Star, Zap, ArrowLeft, UserPlus } from "lucide-react"
+import { Wifi, Gift, Star, Zap, ArrowLeft, UserPlus, AlertTriangle, X, CheckCircle, Trophy } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import Link from "next/link"
 
@@ -53,10 +53,13 @@ function TapContent() {
   const [showAnimation, setShowAnimation] = useState(false)
   const [nfcScanning, setNfcScanning] = useState(false)
   const [error, setError] = useState("")
+  const [businessNotFound, setBusinessNotFound] = useState(false)
+  const [showWelcome, setShowWelcome] = useState(false)
   const router = useRouter()
   const searchParams = useSearchParams()
 
   const nfcTagId = searchParams?.get("nfc")
+  const welcome = searchParams?.get("welcome")
 
   // Fetch business info
   const fetchBusiness = useCallback(async () => {
@@ -80,13 +83,30 @@ function TapContent() {
             setSelectedBusiness(found)
             return
           }
+
+          // Also check registered businesses in localStorage
+          if (typeof window !== "undefined") {
+            const registered = JSON.parse(localStorage.getItem("demo_registered_businesses") || "[]")
+            const regFound = registered.find((b: any) => b.nfc_tag_id === nfcTagId)
+            if (regFound) {
+              setSelectedBusiness(regFound)
+              return
+            }
+          }
         }
+
+        // All lookups failed - NFC tag not recognized
+        setBusinessNotFound(true)
+        return
       }
 
       // No NFC tag - fetch all businesses for selector
       if (isDemoMode) {
         const { demoBusinesses } = await import("@/lib/demo-data")
-        setBusinesses(demoBusinesses)
+        const registered = typeof window !== "undefined"
+          ? JSON.parse(localStorage.getItem("demo_registered_businesses") || "[]")
+          : []
+        setBusinesses([...demoBusinesses, ...registered])
       } else {
         const res = await fetch("/api/businesses")
         if (res.ok) {
@@ -123,7 +143,11 @@ function TapContent() {
           business,
         })
 
-        const businessPrizes = demoPrizes.filter((p: any) => p.business_id === business.id)
+        const registeredPrizes = typeof window !== "undefined"
+          ? JSON.parse(localStorage.getItem("demo_registered_prizes") || "[]")
+          : []
+        const allPrizes = [...demoPrizes, ...registeredPrizes]
+        const businessPrizes = allPrizes.filter((p: any) => p.business_id === business.id)
         setPrizes(businessPrizes)
       } else {
         // Real mode: fetch from API
@@ -253,6 +277,12 @@ function TapContent() {
   }, [fetchBusiness])
 
   useEffect(() => {
+    if (welcome === "true") {
+      setShowWelcome(true)
+    }
+  }, [welcome])
+
+  useEffect(() => {
     if (selectedBusiness && user) {
       fetchPunchCard(selectedBusiness)
     }
@@ -295,6 +325,33 @@ function TapContent() {
                   onClick={() => router.push(`/auth/login?redirect=/tap?nfc=${nfcTagId}`)}
                 >
                   Already have an account? Sign In
+                </Button>
+              </CardContent>
+            </Card>
+          ) : businessNotFound ? (
+            <Card className="border border-red-200 shadow-sm bg-white">
+              <CardHeader className="text-center">
+                <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <AlertTriangle className="h-8 w-8 text-red-600" />
+                </div>
+                <CardTitle className="text-2xl text-gray-900">NFC Tag Not Recognized</CardTitle>
+                <CardDescription className="text-gray-600">
+                  This NFC tag isn't linked to any business in our system.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Button
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                  onClick={() => router.push("/tap")}
+                >
+                  Browse Businesses
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => router.push("/")}
+                >
+                  Go Home
                 </Button>
               </CardContent>
             </Card>
@@ -341,6 +398,43 @@ function TapContent() {
         {error && (
           <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-800 text-sm">
             {error}
+          </div>
+        )}
+
+        {nfcTagId && businessNotFound && (
+          <Card className="mb-6 border border-red-200 shadow-sm bg-red-50">
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-3">
+                <AlertTriangle className="h-6 w-6 text-red-600" />
+                <div>
+                  <p className="font-semibold text-red-900">NFC Tag Not Recognized</p>
+                  <p className="text-sm text-red-700">This tag isn't linked to any business.</p>
+                </div>
+              </div>
+              <div className="mt-3 flex gap-2">
+                <Button size="sm" variant="outline" onClick={() => router.push("/tap")}>
+                  Browse Businesses
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => router.push("/dashboard")}>
+                  Dashboard
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {showWelcome && (
+          <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg flex items-start justify-between">
+            <div className="flex items-start gap-3">
+              <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" />
+              <div>
+                <p className="font-semibold text-green-900">Welcome, {user.name}!</p>
+                <p className="text-sm text-green-700">Tap below to collect your first punch.</p>
+              </div>
+            </div>
+            <button onClick={() => setShowWelcome(false)} className="text-green-600 hover:text-green-800">
+              <X className="h-4 w-4" />
+            </button>
           </div>
         )}
 
@@ -513,6 +607,15 @@ function TapContent() {
                 </CardContent>
               </Card>
             )}
+
+            {/* View Leaderboard Link */}
+            <Link
+              href={`/leaderboard/${selectedBusiness.id}`}
+              className="flex items-center justify-center gap-2 mt-4 py-3 text-sm font-medium text-orange-600 hover:text-orange-700 transition-colors"
+            >
+              <Trophy className="h-4 w-4" />
+              View Leaderboard
+            </Link>
           </>
         )}
       </div>
