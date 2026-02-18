@@ -1,0 +1,6 @@
+stamps.db*
+__pycache__/
+*.pyc
+.env
+certs/
+venv/

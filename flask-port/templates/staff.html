@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Staff — {{ shop.name }}</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,-apple-system,sans-serif;background:#0f172a;color:#e2e8f0;min-height:100vh}
+.wrap{max-width:480px;margin:0 auto;padding:24px 16px}
+h1{font-size:1.3rem;text-align:center;color:#fff;margin-bottom:4px}
+.sub{text-align:center;color:#94a3b8;font-size:.85rem;margin-bottom:24px}
+.msg{padding:10px 14px;border-radius:8px;margin-bottom:16px;font-size:.9rem}
+.msg-ok{background:#14532d;color:#86efac}
+.msg-err{background:#7f1d1d;color:#fca5a5}
+form.lookup{display:flex;gap:8px;margin-bottom:24px}
+input[type=text],input[type=tel]{flex:1;padding:10px 14px;border-radius:8px;border:1px solid #334155;background:#1e293b;color:#fff;font-size:.95rem}
+input::placeholder{color:#64748b}
+button{padding:10px 20px;border-radius:8px;border:none;background:#3b82f6;color:#fff;font-weight:600;cursor:pointer;font-size:.95rem}
+button:hover{background:#2563eb}
+.card{background:#1e293b;border-radius:12px;padding:20px;margin-bottom:16px;border:1px solid #334155}
+.card-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+.phone-label{font-weight:700;font-size:1.1rem;color:#fff}
+.badge{font-size:.75rem;padding:3px 8px;border-radius:99px}
+.badge-avail{background:#14532d;color:#86efac}
+.badge-none{background:#334155;color:#94a3b8}
+.dots{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+.dot{width:28px;height:28px;border-radius:50%;border:2px solid #475569;display:flex;align-items:center;justify-content:center;font-size:.7rem;color:#475569}
+.dot.filled{background:#3b82f6;border-color:#3b82f6;color:#fff}
+.meta{display:flex;justify-content:space-between;font-size:.8rem;color:#94a3b8;margin-bottom:14px}
+.redeem-form{display:flex;gap:8px;align-items:center}
+.redeem-form input[type=text]{flex:1}
+.btn-redeem{background:#22c55e;padding:10px 20px}
+.btn-redeem:hover{background:#16a34a}
+.btn-redeem:disabled{background:#475569;cursor:not-allowed}
+h2{font-size:1rem;color:#94a3b8;margin:20px 0 10px}
+table{width:100%;border-collapse:collapse;font-size:.85rem}
+th{text-align:left;color:#64748b;padding:6px 8px;border-bottom:1px solid #334155}
+td{padding:6px 8px;border-bottom:1px solid #1e293b;color:#cbd5e1}
+.empty{text-align:center;padding:24px 0;color:#64748b}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>{{ shop.name }}</h1>
+  <p class="sub">Staff Redemption Portal</p>
+
+  {% if success %}
+  <div class="msg msg-ok">{{ success }}</div>
+  {% endif %}
+  {% if error %}
+  <div class="msg msg-err">{{ error }}</div>
+  {% endif %}
+
+  <form class="lookup" action="/staff" method="get">
+    <input type="hidden" name="shop_id" value="{{ shop.nfc_tag }}">
+    <input type="hidden" name="pin" value="{{ pin }}">
+    <input type="tel" name="phone" placeholder="Customer phone number"
+           value="{{ phone or '' }}" inputmode="numeric">
+    <button type="submit">Look Up</button>
+  </form>
+
+  {% if phone and card %}
+  <div class="card">
+    <div class="card-head">
+      <span class="phone-label">{{ phone }}</span>
+      {% if available > 0 %}
+      <span class="badge badge-avail">{{ available }} reward{{ 's' if available != 1 }}</span>
+      {% else %}
+      <span class="badge badge-none">0 rewards</span>
+      {% endif %}
+    </div>
+    <div class="dots">
+      {% for i in range(card.max_stamps) %}
+      <div class="dot {{ 'filled' if i < card.current_stamps }}">{{ '&#10003;' if i < card.current_stamps }}</div>
+      {% endfor %}
+    </div>
+    <div class="meta">
+      <span>{{ card.current_stamps }}/{{ card.max_stamps }} stamps</span>
+      <span>{{ card.total_stamps }} lifetime</span>
+    </div>
+
+    {% if available > 0 %}
+    <form class="redeem-form" action="/redeem" method="post">
+      <input type="hidden" name="shop_id" value="{{ shop.nfc_tag }}">
+      <input type="hidden" name="pin" value="{{ pin }}">
+      <input type="hidden" name="phone" value="{{ phone }}">
+      <input type="text" name="staff_note" placeholder="Note (optional)" maxlength="200">
+      <button type="submit" class="btn-redeem">Redeem</button>
+    </form>
+    {% else %}
+    <button class="btn-redeem" disabled>No rewards to redeem</button>
+    {% endif %}
+  </div>
+
+  {% if history|length > 0 %}
+  <h2>Redemption History</h2>
+  <table>
+    <tr><th>Date</th><th>Note</th></tr>
+    {% for r in history %}
+    <tr>
+      <td>{{ r.redeemed_at }}</td>
+      <td>{{ r.staff_note or '—' }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% endif %}
+
+  {% elif phone %}
+  <div class="empty">
+    <p>No card found for <strong>{{ phone }}</strong> at this shop.</p>
+  </div>
+  {% endif %}
+</div>
+</body>
+</html>

@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TapRanked — Loyalty Dashboard</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,-apple-system,sans-serif;background:#0f172a;color:#e2e8f0;min-height:100vh}
+.wrap{max-width:480px;margin:0 auto;padding:24px 16px}
+h1{font-size:1.5rem;text-align:center;margin-bottom:4px;color:#fff}
+.sub{text-align:center;color:#94a3b8;font-size:.85rem;margin-bottom:24px}
+.error{background:#7f1d1d;color:#fca5a5;padding:10px 14px;border-radius:8px;margin-bottom:16px;font-size:.9rem}
+form{display:flex;gap:8px;margin-bottom:28px}
+input[type=text]{flex:1;padding:10px 14px;border-radius:8px;border:1px solid #334155;background:#1e293b;color:#fff;font-size:.95rem}
+input::placeholder{color:#64748b}
+button{padding:10px 20px;border-radius:8px;border:none;background:#3b82f6;color:#fff;font-weight:600;cursor:pointer;font-size:.95rem}
+button:hover{background:#2563eb}
+.card{background:#1e293b;border-radius:12px;padding:20px;margin-bottom:16px;border:1px solid #334155}
+.card-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+.shop-name{font-weight:700;font-size:1.1rem;color:#fff}
+.badge{font-size:.75rem;padding:3px 8px;border-radius:99px;background:#164e63;color:#67e8f9}
+.dots{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+.dot{width:28px;height:28px;border-radius:50%;border:2px solid #475569;display:flex;align-items:center;justify-content:center;font-size:.7rem;color:#475569}
+.dot.filled{background:#3b82f6;border-color:#3b82f6;color:#fff}
+.meta{display:flex;justify-content:space-between;font-size:.8rem;color:#94a3b8}
+.wallet-btn{display:inline-block;margin-top:10px;padding:6px 14px;border-radius:6px;background:#4f46e5;color:#fff;text-decoration:none;font-size:.8rem;font-weight:500}
+.wallet-btn:hover{background:#4338ca}
+.empty{text-align:center;padding:40px 0;color:#64748b}
+.empty p{margin-bottom:12px}
+.tap-hint{text-align:center;color:#64748b;font-size:.8rem;margin-top:24px}
+.tap-hint code{background:#1e293b;padding:2px 6px;border-radius:4px;color:#94a3b8}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>TapRanked</h1>
+  <p class="sub">Your loyalty stamps dashboard</p>
+
+  {% if error %}<div class="error">{{ error }}</div>{% endif %}
+
+  <form action="/dashboard" method="get">
+    <input type="text" name="phone" placeholder="Enter phone number" value="{{ phone or '' }}">
+    <button type="submit">View</button>
+  </form>
+
+  {% if phone and cards|length > 0 %}
+    {% for c in cards %}
+    {% set available = c.rewards_earned - (c.rewards_redeemed or 0) %}
+    <div class="card">
+      <div class="card-head">
+        <span class="shop-name">{{ c.shop_name }}</span>
+        {% if available > 0 %}
+        <span class="badge">{{ available }} reward{{ 's' if available != 1 }}</span>
+        {% endif %}
+      </div>
+      <div class="dots">
+        {% for i in range(c.max_stamps) %}
+        <div class="dot {{ 'filled' if i < c.current_stamps }}">{{ '&#10003;' if i < c.current_stamps }}</div>
+        {% endfor %}
+      </div>
+      <div class="meta">
+        <span>{{ c.current_stamps }}/{{ c.max_stamps }} stamps</span>
+        <span>{{ c.total_stamps }} lifetime</span>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <a class="wallet-btn" href="/add-to-apple-wallet?phone={{ phone }}&shop_id={{ c.shop_id }}"
+           style="background:#000"> Apple Wallet</a>
+        <a class="wallet-btn" href="/add-to-google-wallet?phone={{ phone }}&shop_id={{ c.shop_id }}">
+           Google Wallet</a>
+      </div>
+    </div>
+    {% endfor %}
+  {% elif phone %}
+    <div class="empty">
+      <p>No stamps yet for <strong>{{ phone }}</strong></p>
+      <p>Visit a shop and tap to start collecting!</p>
+    </div>
+  {% else %}
+    <div class="empty">
+      <p>Enter your phone number to view your loyalty cards.</p>
+    </div>
+  {% endif %}
+
+  <p class="tap-hint">
+    Shop owners: point NFC signs to<br>
+    <code>GET /tap?nfc=YOUR_TAG&amp;phone=CUSTOMER_PHONE</code>
+  </p>
+</div>
+</body>
+</html>

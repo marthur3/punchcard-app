@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{ shop.name }} — Collect Stamp</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,-apple-system,sans-serif;background:#0f172a;color:#e2e8f0;min-height:100vh;display:flex;align-items:center;justify-content:center}
+.wrap{max-width:400px;width:100%;padding:32px 20px;text-align:center}
+.logo{font-size:2rem;margin-bottom:8px}
+h1{font-size:1.4rem;color:#fff;margin-bottom:6px}
+.reward{color:#67e8f9;font-size:.95rem;margin-bottom:32px}
+label{display:block;text-align:left;font-size:.85rem;color:#94a3b8;margin-bottom:6px}
+input[type=tel]{width:100%;padding:14px 16px;border-radius:10px;border:1px solid #334155;background:#1e293b;color:#fff;font-size:1.1rem;margin-bottom:20px;text-align:center;letter-spacing:1px}
+input[type=tel]::placeholder{color:#64748b;letter-spacing:0}
+input[type=tel]:focus{outline:none;border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,.25)}
+button{width:100%;padding:14px;border-radius:10px;border:none;background:#3b82f6;color:#fff;font-weight:700;font-size:1.05rem;cursor:pointer;transition:background .15s}
+button:hover{background:#2563eb}
+button:active{background:#1d4ed8}
+.note{margin-top:24px;font-size:.8rem;color:#64748b}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="logo">&#9749;</div>
+  <h1>{{ shop.name }}</h1>
+  <p class="reward">Earn: {{ shop.reward }} after {{ shop.max_stamps }} stamps</p>
+
+  <form action="/tap" method="post">
+    <input type="hidden" name="nfc" value="{{ nfc }}">
+    <label for="phone">Your phone number</label>
+    <input type="tel" id="phone" name="phone" placeholder="e.g. 5551234567"
+           required autofocus inputmode="numeric" pattern="[0-9]*">
+    <button type="submit">Collect Stamp</button>
+  </form>
+
+  <p class="note">Enter your phone number to track your stamps.<br>No app download needed.</p>
+</div>
+</body>
+</html>
