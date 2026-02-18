@@ -7,7 +7,7 @@
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:system-ui,-apple-system,sans-serif;background:#0f172a;color:#e2e8f0;min-height:100vh;display:flex;align-items:center;justify-content:center}
 .wrap{max-width:400px;width:100%;padding:32px 20px;text-align:center}
-.logo{font-size:2rem;margin-bottom:8px}
+.logo{font-size:2.5rem;margin-bottom:12px}
 h1{font-size:1.4rem;color:#fff;margin-bottom:6px}
 .reward{color:#67e8f9;font-size:.95rem;margin-bottom:32px}
 label{display:block;text-align:left;font-size:.85rem;color:#94a3b8;margin-bottom:6px}
@@ -17,6 +17,8 @@ input[type=tel]:focus{outline:none;border-color:#3b82f6;box-shadow:0 0 0 3px rgb
 button{width:100%;padding:14px;border-radius:10px;border:none;background:#3b82f6;color:#fff;font-weight:700;font-size:1.05rem;cursor:pointer;transition:background .15s}
 button:hover{background:#2563eb}
 button:active{background:#1d4ed8}
+.dots{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-bottom:28px}
+.dot{width:28px;height:28px;border-radius:50%;border:2px solid #475569}
 .note{margin-top:24px;font-size:.8rem;color:#64748b}
 </style>
 </head>
@@ -26,6 +28,12 @@ button:active{background:#1d4ed8}
   <h1>{{ shop.name }}</h1>
   <p class="reward">Earn: {{ shop.reward }} after {{ shop.max_stamps }} stamps</p>
 
+  <div class="dots">
+    {% for i in range(shop.max_stamps) %}
+    <div class="dot"></div>
+    {% endfor %}
+  </div>
+
   <form action="/tap" method="post">
     <input type="hidden" name="nfc" value="{{ nfc }}">
     <label for="phone">Your phone number</label>
@@ -34,7 +42,7 @@ button:active{background:#1d4ed8}
     <button type="submit">Collect Stamp</button>
   </form>
 
-  <p class="note">Enter your phone number to track your stamps.<br>No app download needed.</p>
+  <p class="note">Your number is only used to track stamps.<br>No account or app required.</p>
 </div>
 </body>
 </html>
