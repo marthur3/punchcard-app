@@ -29,7 +29,18 @@ from flask import (
 )
 from io import BytesIO
 
+import random
+import string
+
 from db import P, close_db, commit, execute, get_db, init_db, uid
+from auth import (
+    clear_auth_cookie,
+    create_session,
+    is_authenticated,
+    require_admin,
+    set_auth_cookie,
+    verify_password,
+)
 from wallet.apple import generate_pkpass, push_update_for_card as apple_push
 from wallet.google import (
     ensure_loyalty_class,
@@ -73,7 +84,7 @@ def _force_https():
 
 @app.route("/")
 def home():
-    return redirect(url_for("dashboard"))
+    return render_template("landing.html")
 
 
 # ---------------------------------------------------------------------------
@@ -91,6 +102,8 @@ def tap_landing():
     shop = execute(db, f"SELECT * FROM shops WHERE nfc_tag = {P}", (nfc,)).fetchone()
     if not shop:
         abort(404, "Shop not found")
+    if not shop["is_active"]:
+        abort(404, "This shop is no longer active")
 
     return render_template("tap_landing.html", shop=shop, nfc=nfc)
 
@@ -225,14 +238,15 @@ def staff_portal():
     pin = request.args.get("pin", "").strip()
     phone = request.args.get("phone", "").strip()
 
-    expected_pin = os.environ.get("STAFF_PIN", "0000")
-    if pin != expected_pin:
-        abort(403, "Invalid PIN")
-
     db = get_db()
     shop = execute(db, f"SELECT * FROM shops WHERE nfc_tag = {P}", (shop_nfc,)).fetchone()
     if not shop:
         abort(404, "Shop not found")
+
+    # Check per-shop PIN (fall back to global env var for legacy shops)
+    expected_pin = shop["staff_pin"] or os.environ.get("STAFF_PIN", "0000")
+    if pin != expected_pin:
+        abort(403, "Invalid PIN")
 
     card = None
     available = 0
@@ -276,14 +290,14 @@ def redeem():
     phone = request.form.get("phone", "").strip()
     staff_note = request.form.get("staff_note", "").strip()
 
-    expected_pin = os.environ.get("STAFF_PIN", "0000")
-    if pin != expected_pin:
-        abort(403, "Invalid PIN")
-
     db = get_db()
     shop = execute(db, f"SELECT * FROM shops WHERE nfc_tag = {P}", (shop_nfc,)).fetchone()
     if not shop:
         abort(404, "Shop not found")
+
+    expected_pin = shop["staff_pin"] or os.environ.get("STAFF_PIN", "0000")
+    if pin != expected_pin:
+        abort(403, "Invalid PIN")
 
     card = execute(
         db,
@@ -324,6 +338,259 @@ def redeem():
             phone=phone,
             success=f"Redeemed {shop['reward']} for {phone}",
         )
+    )
+
+
+# ---------------------------------------------------------------------------
+# Super Admin
+# ---------------------------------------------------------------------------
+
+
+def _gen_pin():
+    """Generate a random 4-digit PIN."""
+    return "".join(random.choices(string.digits, k=4))
+
+
+def _gen_nfc_slug(name):
+    """Generate an NFC tag slug from a shop name."""
+    slug = "".join(c if c.isalnum() else "_" for c in name.lower()).strip("_")
+    return f"nfc_{slug}_{uid()[:6]}"
+
+
+@app.route("/super/login", methods=["GET", "POST"])
+def super_login():
+    """Admin login page."""
+    if request.method == "GET":
+        if is_authenticated():
+            return redirect(url_for("super_shops"))
+        return render_template("super_login.html", error=None)
+
+    email = request.form.get("email", "").strip()
+    password = request.form.get("password", "")
+    expected_email = os.environ.get("SUPER_ADMIN_EMAIL", "")
+
+    if email != expected_email or not verify_password(password):
+        return render_template("super_login.html", error="Invalid credentials"), 401
+
+    db = get_db()
+    token = create_session(db)
+    resp = redirect(url_for("super_shops"))
+    return set_auth_cookie(resp, token)
+
+
+@app.route("/super/logout")
+def super_logout():
+    resp = redirect(url_for("super_login"))
+    return clear_auth_cookie(resp)
+
+
+@app.route("/super/shops")
+@require_admin
+def super_shops():
+    """List all shops with stats."""
+    db = get_db()
+    shops = execute(
+        db,
+        f"SELECT s.*, "
+        f"(SELECT COUNT(DISTINCT c.phone) FROM cards c WHERE c.shop_id = s.id) AS customer_count, "
+        f"(SELECT COALESCE(SUM(c.total_stamps), 0) FROM cards c WHERE c.shop_id = s.id) AS stamp_count "
+        f"FROM shops s ORDER BY s.created_at DESC",
+    ).fetchall()
+    shops = [dict(s) for s in shops]
+    return render_template("super_shops.html", shops=shops)
+
+
+@app.route("/super/shops/new", methods=["GET", "POST"])
+@require_admin
+def super_shop_new():
+    """Create a new shop."""
+    if request.method == "GET":
+        return render_template("super_shop_form.html", shop=None, error=None)
+
+    name = request.form.get("name", "").strip()
+    if not name:
+        return render_template("super_shop_form.html", shop=None, error="Shop name is required")
+
+    emoji = request.form.get("emoji", "").strip() or "☕"
+    max_stamps = int(request.form.get("max_stamps", 10))
+    reward = request.form.get("reward", "").strip() or "Free item"
+    staff_pin = request.form.get("staff_pin", "").strip() or _gen_pin()
+    nfc_tag = request.form.get("nfc_tag", "").strip() or _gen_nfc_slug(name)
+    owner_name = request.form.get("owner_name", "").strip() or None
+    owner_phone = request.form.get("owner_phone", "").strip() or None
+
+    db = get_db()
+
+    # Check for duplicate nfc_tag
+    existing = execute(db, f"SELECT id FROM shops WHERE nfc_tag = {P}", (nfc_tag,)).fetchone()
+    if existing:
+        return render_template("super_shop_form.html", shop=None, error=f"NFC tag '{nfc_tag}' already exists")
+
+    execute(
+        db,
+        f"INSERT INTO shops (id, name, max_stamps, nfc_tag, reward, staff_pin, emoji, owner_name, owner_phone) "
+        f"VALUES ({P},{P},{P},{P},{P},{P},{P},{P},{P})",
+        (uid(), name, max_stamps, nfc_tag, reward, staff_pin, emoji, owner_name, owner_phone),
+    )
+    commit(db)
+    return redirect(url_for("super_shops"))
+
+
+@app.route("/super/shops/<shop_id>/edit", methods=["GET", "POST"])
+@require_admin
+def super_shop_edit(shop_id):
+    """Edit a shop."""
+    db = get_db()
+    shop = execute(db, f"SELECT * FROM shops WHERE id = {P}", (shop_id,)).fetchone()
+    if not shop:
+        abort(404, "Shop not found")
+
+    if request.method == "GET":
+        return render_template("super_shop_form.html", shop=dict(shop), error=None)
+
+    name = request.form.get("name", "").strip()
+    if not name:
+        return render_template("super_shop_form.html", shop=dict(shop), error="Shop name is required")
+
+    emoji = request.form.get("emoji", "").strip() or "☕"
+    max_stamps = int(request.form.get("max_stamps", 10))
+    reward = request.form.get("reward", "").strip() or "Free item"
+    staff_pin = request.form.get("staff_pin", "").strip() or shop["staff_pin"]
+    owner_name = request.form.get("owner_name", "").strip() or None
+    owner_phone = request.form.get("owner_phone", "").strip() or None
+
+    execute(
+        db,
+        f"UPDATE shops SET name={P}, emoji={P}, max_stamps={P}, reward={P}, "
+        f"staff_pin={P}, owner_name={P}, owner_phone={P} WHERE id={P}",
+        (name, emoji, max_stamps, reward, staff_pin, owner_name, owner_phone, shop_id),
+    )
+    commit(db)
+    return redirect(url_for("super_shops"))
+
+
+@app.route("/super/shops/<shop_id>/delete", methods=["POST"])
+@require_admin
+def super_shop_delete(shop_id):
+    """Deactivate a shop (soft delete)."""
+    db = get_db()
+    execute(db, f"UPDATE shops SET is_active = {P} WHERE id = {P}",
+            (False if db.__class__.__module__ == "psycopg2.extensions" else 0, shop_id))
+    commit(db)
+    return redirect(url_for("super_shops"))
+
+
+@app.route("/super/activity")
+@require_admin
+def super_activity():
+    """Recent stamps and redemptions across all shops."""
+    db = get_db()
+
+    # Combine stamps and redemptions into one feed, newest first
+    stamps = execute(
+        db,
+        f"SELECT sl.stamped_at AS timestamp, s.name AS shop_name, c.phone, "
+        f"'stamp' AS action, NULL AS note "
+        f"FROM stamp_log sl "
+        f"JOIN cards c ON sl.card_id = c.id "
+        f"JOIN shops s ON c.shop_id = s.id "
+        f"ORDER BY sl.stamped_at DESC LIMIT 50",
+    ).fetchall()
+
+    redemptions = execute(
+        db,
+        f"SELECT r.redeemed_at AS timestamp, s.name AS shop_name, c.phone, "
+        f"'redeem' AS action, r.staff_note AS note "
+        f"FROM redemptions r "
+        f"JOIN cards c ON r.card_id = c.id "
+        f"JOIN shops s ON c.shop_id = s.id "
+        f"ORDER BY r.redeemed_at DESC LIMIT 50",
+    ).fetchall()
+
+    activity = sorted(
+        [dict(r) for r in stamps] + [dict(r) for r in redemptions],
+        key=lambda x: x["timestamp"] or "",
+        reverse=True,
+    )[:100]
+
+    return render_template("super_activity.html", activity=activity)
+
+
+# ---------------------------------------------------------------------------
+# Shop Owner Dashboard
+# ---------------------------------------------------------------------------
+
+@app.route("/owner/<shop_nfc>")
+def owner_dashboard(shop_nfc):
+    """Shop owner stats view — authenticated by staff PIN."""
+    pin = request.args.get("pin", "").strip()
+
+    db = get_db()
+    shop = execute(db, f"SELECT * FROM shops WHERE nfc_tag = {P}", (shop_nfc,)).fetchone()
+    if not shop:
+        abort(404, "Shop not found")
+
+    expected_pin = shop["staff_pin"] or os.environ.get("STAFF_PIN", "0000")
+    if pin != expected_pin:
+        abort(403, "Invalid PIN")
+
+    shop = dict(shop)
+    shop_id = shop["id"]
+
+    # Aggregate stats
+    totals = execute(
+        db,
+        f"SELECT COALESCE(SUM(total_stamps), 0) AS total_stamps, "
+        f"COUNT(DISTINCT phone) AS unique_customers, "
+        f"COALESCE(SUM(rewards_earned), 0) AS rewards_earned, "
+        f"COALESCE(SUM(rewards_redeemed), 0) AS rewards_redeemed "
+        f"FROM cards WHERE shop_id = {P}",
+        (shop_id,),
+    ).fetchone()
+
+    # Stamps today
+    today_q = (
+        f"SELECT COUNT(*) AS cnt FROM stamp_log sl JOIN cards c ON sl.card_id = c.id "
+        f"WHERE c.shop_id = {P} AND sl.stamped_at >= CURRENT_DATE"
+        if db.__class__.__module__ != "sqlite3"
+        else f"SELECT COUNT(*) AS cnt FROM stamp_log sl JOIN cards c ON sl.card_id = c.id "
+             f"WHERE c.shop_id = {P} AND sl.stamped_at >= date('now')"
+    )
+    stamps_today = execute(db, today_q, (shop_id,)).fetchone()
+
+    # Stamps this week
+    week_q = (
+        f"SELECT COUNT(*) AS cnt FROM stamp_log sl JOIN cards c ON sl.card_id = c.id "
+        f"WHERE c.shop_id = {P} AND sl.stamped_at >= CURRENT_DATE - INTERVAL '7 days'"
+        if db.__class__.__module__ != "sqlite3"
+        else f"SELECT COUNT(*) AS cnt FROM stamp_log sl JOIN cards c ON sl.card_id = c.id "
+             f"WHERE c.shop_id = {P} AND sl.stamped_at >= date('now', '-7 days')"
+    )
+    stamps_week = execute(db, week_q, (shop_id,)).fetchone()
+
+    stats = {
+        "total_stamps": totals["total_stamps"],
+        "unique_customers": totals["unique_customers"],
+        "rewards_earned": totals["rewards_earned"],
+        "rewards_redeemed": totals["rewards_redeemed"],
+        "stamps_today": stamps_today["cnt"],
+        "stamps_week": stamps_week["cnt"],
+    }
+
+    # Recent stamps
+    recent_stamps = execute(
+        db,
+        f"SELECT sl.stamped_at, c.phone, c.current_stamps "
+        f"FROM stamp_log sl JOIN cards c ON sl.card_id = c.id "
+        f"WHERE c.shop_id = {P} ORDER BY sl.stamped_at DESC LIMIT 20",
+        (shop_id,),
+    ).fetchall()
+
+    return render_template(
+        "owner_dashboard.html",
+        shop=shop,
+        stats=stats,
+        recent_stamps=recent_stamps,
     )
 
 

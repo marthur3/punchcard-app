@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{ shop.name }} — Owner Dashboard</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,-apple-system,sans-serif;background:#0f172a;color:#e2e8f0;min-height:100vh}
+.wrap{max-width:500px;margin:0 auto;padding:24px 16px}
+h1{font-size:1.3rem;text-align:center;color:#fff;margin-bottom:4px}
+.sub{text-align:center;color:#94a3b8;font-size:.85rem;margin-bottom:28px}
+.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:24px}
+.stat{background:#1e293b;border-radius:10px;padding:16px;border:1px solid #334155;text-align:center}
+.stat-val{font-size:1.6rem;font-weight:700;color:#fff}
+.stat-label{font-size:.8rem;color:#94a3b8;margin-top:2px}
+h2{font-size:1rem;color:#94a3b8;margin:20px 0 10px}
+table{width:100%;border-collapse:collapse;font-size:.85rem}
+th{text-align:left;color:#64748b;padding:6px 8px;border-bottom:1px solid #334155}
+td{padding:6px 8px;border-bottom:1px solid #1e293b;color:#cbd5e1}
+.links{display:flex;gap:10px;margin-top:24px;justify-content:center}
+.links a{padding:8px 16px;border-radius:8px;text-decoration:none;font-size:.85rem;font-weight:600}
+.link-staff{background:#3b82f6;color:#fff}
+.link-tap{background:#1e293b;color:#67e8f9;border:1px solid #334155}
+.empty{text-align:center;color:#64748b;font-size:.85rem;padding:16px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>{{ shop.emoji }} {{ shop.name }}</h1>
+  <p class="sub">Owner Dashboard</p>
+
+  <div class="stat-grid">
+    <div class="stat">
+      <div class="stat-val">{{ stats.stamps_today }}</div>
+      <div class="stat-label">Stamps Today</div>
+    </div>
+    <div class="stat">
+      <div class="stat-val">{{ stats.stamps_week }}</div>
+      <div class="stat-label">This Week</div>
+    </div>
+    <div class="stat">
+      <div class="stat-val">{{ stats.unique_customers }}</div>
+      <div class="stat-label">Customers</div>
+    </div>
+    <div class="stat">
+      <div class="stat-val">{{ stats.total_stamps }}</div>
+      <div class="stat-label">Total Stamps</div>
+    </div>
+    <div class="stat">
+      <div class="stat-val">{{ stats.rewards_earned }}</div>
+      <div class="stat-label">Rewards Earned</div>
+    </div>
+    <div class="stat">
+      <div class="stat-val">{{ stats.rewards_redeemed }}</div>
+      <div class="stat-label">Redeemed</div>
+    </div>
+  </div>
+
+  {% if recent_stamps|length > 0 %}
+  <h2>Recent Stamps</h2>
+  <table>
+    <tr><th>Time</th><th>Customer</th><th>Stamps</th></tr>
+    {% for r in recent_stamps %}
+    <tr>
+      <td>{{ r.stamped_at }}</td>
+      <td>{{ r.phone }}</td>
+      <td>{{ r.current_stamps }}/{{ shop.max_stamps }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <div class="empty">No stamps yet.</div>
+  {% endif %}
+
+  <div class="links">
+    <a class="link-staff" href="/staff?shop_id={{ shop.nfc_tag }}&pin={{ shop.staff_pin }}">Staff Portal</a>
+    <a class="link-tap" href="/tap?nfc={{ shop.nfc_tag }}">Customer Tap Page</a>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TapRanked — {{ 'Edit' if shop else 'New' }} Shop</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,-apple-system,sans-serif;background:#0f172a;color:#e2e8f0;min-height:100vh}
+.wrap{max-width:500px;margin:0 auto;padding:24px 16px}
+.nav{display:flex;gap:12px;margin-bottom:24px}
+.nav a{color:#94a3b8;text-decoration:none;font-size:.85rem;padding:6px 12px;border-radius:6px;background:#1e293b}
+.nav a:hover{background:#334155;color:#fff}
+h1{font-size:1.3rem;color:#fff;margin-bottom:24px}
+.error{background:#7f1d1d;color:#fca5a5;padding:10px 14px;border-radius:8px;margin-bottom:16px;font-size:.9rem}
+label{display:block;font-size:.85rem;color:#94a3b8;margin-bottom:6px;margin-top:16px}
+label:first-of-type{margin-top:0}
+input,select{width:100%;padding:10px 14px;border-radius:8px;border:1px solid #334155;background:#1e293b;color:#fff;font-size:.95rem}
+input::placeholder{color:#64748b}
+input:focus,select:focus{outline:none;border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,.25)}
+.row{display:flex;gap:12px}
+.row>div{flex:1}
+.hint{font-size:.75rem;color:#64748b;margin-top:4px}
+button{margin-top:24px;width:100%;padding:12px;border-radius:8px;border:none;background:#3b82f6;color:#fff;font-weight:700;font-size:1rem;cursor:pointer}
+button:hover{background:#2563eb}
+.btn-danger{background:#dc2626;margin-top:12px}
+.btn-danger:hover{background:#b91c1c}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav class="nav">
+    <a href="/super/shops">&larr; Back to Shops</a>
+  </nav>
+
+  <h1>{{ 'Edit' if shop else 'New' }} Shop</h1>
+
+  {% if error %}<div class="error">{{ error }}</div>{% endif %}
+
+  <form method="post">
+    <label for="name">Shop Name</label>
+    <input type="text" id="name" name="name" placeholder="Mill Mountain Coffee" required
+           value="{{ shop.name if shop else '' }}">
+
+    <div class="row">
+      <div>
+        <label for="emoji">Emoji</label>
+        <input type="text" id="emoji" name="emoji" placeholder="☕" maxlength="4"
+               value="{{ shop.emoji if shop else '☕' }}">
+      </div>
+      <div>
+        <label for="max_stamps">Stamps per Card</label>
+        <input type="number" id="max_stamps" name="max_stamps" min="2" max="30"
+               value="{{ shop.max_stamps if shop else 10 }}">
+      </div>
+    </div>
+
+    <label for="reward">Reward</label>
+    <input type="text" id="reward" name="reward" placeholder="Free Coffee"
+           value="{{ shop.reward if shop else '' }}">
+
+    <div class="row">
+      <div>
+        <label for="staff_pin">Staff PIN</label>
+        <input type="text" id="staff_pin" name="staff_pin" placeholder="4-digit PIN" maxlength="6" pattern="[0-9]*" inputmode="numeric"
+               value="{{ shop.staff_pin if shop else '' }}">
+        <p class="hint">{{ 'Auto-generated if left blank' if not shop else 'Used for staff & owner portals' }}</p>
+      </div>
+      <div>
+        <label for="nfc_tag">NFC Tag Slug</label>
+        <input type="text" id="nfc_tag" name="nfc_tag" placeholder="auto-generated"
+               value="{{ shop.nfc_tag if shop else '' }}" {{ 'readonly' if shop }}>
+        <p class="hint">{{ 'Cannot be changed after creation' if shop else 'Auto-generated if left blank' }}</p>
+      </div>
+    </div>
+
+    <label for="owner_name">Owner Name (optional)</label>
+    <input type="text" id="owner_name" name="owner_name" placeholder="John Smith"
+           value="{{ shop.owner_name if shop and shop.owner_name else '' }}">
+
+    <label for="owner_phone">Owner Phone (optional)</label>
+    <input type="tel" id="owner_phone" name="owner_phone" placeholder="5551234567"
+           value="{{ shop.owner_phone if shop and shop.owner_phone else '' }}">
+
+    <button type="submit">{{ 'Save Changes' if shop else 'Create Shop' }}</button>
+  </form>
+
+  {% if shop %}
+  <form method="post" action="/super/shops/{{ shop.id }}/delete"
+        onsubmit="return confirm('Deactivate {{ shop.name }}? This hides it from customers.')">
+    <button type="submit" class="btn-danger">Deactivate Shop</button>
+  </form>
+  {% endif %}
+</div>
+</body>
+</html>

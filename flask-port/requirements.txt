@@ -6,3 +6,4 @@ httpx[http2]>=0.28.0
 google-auth>=2.38.0
 requests>=2.32.0
 psycopg2-binary>=2.9.9
+bcrypt>=4.2.0

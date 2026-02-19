@@ -24,7 +24,7 @@ button:active{background:#1d4ed8}
 </head>
 <body>
 <div class="wrap">
-  <div class="logo">&#9749;</div>
+  <div class="logo">{{ shop.emoji or '☕' }}</div>
   <h1>{{ shop.name }}</h1>
   <p class="reward">Earn: {{ shop.reward }} after {{ shop.max_stamps }} stamps</p>
 

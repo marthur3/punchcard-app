@@ -41,7 +41,7 @@ h1{font-size:1.4rem;color:#fff;margin-bottom:4px}
   </div>
 
   <h1>Stamp Collected!</h1>
-  <p class="shop">{{ shop.name }}</p>
+  <p class="shop">{{ shop.emoji or '☕' }} {{ shop.name }}</p>
 
   {% if reward_earned %}
   <div class="reward-banner">

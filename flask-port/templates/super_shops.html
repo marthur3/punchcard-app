@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TapRanked — Manage Shops</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,-apple-system,sans-serif;background:#0f172a;color:#e2e8f0;min-height:100vh}
+.wrap{max-width:800px;margin:0 auto;padding:24px 16px}
+.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:24px}
+h1{font-size:1.3rem;color:#fff}
+.nav{display:flex;gap:12px;margin-bottom:24px}
+.nav a{color:#94a3b8;text-decoration:none;font-size:.85rem;padding:6px 12px;border-radius:6px;background:#1e293b}
+.nav a:hover,.nav a.active{background:#334155;color:#fff}
+.btn-new{padding:8px 16px;border-radius:8px;border:none;background:#22c55e;color:#fff;font-weight:600;cursor:pointer;text-decoration:none;font-size:.9rem}
+.btn-new:hover{background:#16a34a}
+.card{background:#1e293b;border-radius:12px;padding:16px 20px;margin-bottom:12px;border:1px solid #334155}
+.card-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.shop-name{font-weight:700;font-size:1.05rem;color:#fff}
+.badge{font-size:.7rem;padding:2px 8px;border-radius:99px}
+.badge-active{background:#14532d;color:#86efac}
+.badge-inactive{background:#7f1d1d;color:#fca5a5}
+.stats{display:flex;gap:16px;font-size:.8rem;color:#94a3b8;margin-bottom:10px}
+.stats span{display:flex;align-items:center;gap:4px}
+.links{display:flex;flex-wrap:wrap;gap:8px;font-size:.8rem}
+.links a,.links button{padding:4px 10px;border-radius:6px;text-decoration:none;font-size:.8rem;cursor:pointer;border:none}
+.link-tap{background:#164e63;color:#67e8f9}
+.link-staff{background:#1e1b4b;color:#a5b4fc}
+.link-owner{background:#422006;color:#fdba74}
+.link-edit{background:#334155;color:#e2e8f0}
+.link-copy{background:#0f172a;color:#94a3b8;border:1px solid #334155}
+.copy-msg{font-size:.75rem;color:#86efac;margin-left:4px;display:none}
+.meta{font-size:.75rem;color:#64748b;margin-top:8px}
+.empty{text-align:center;padding:40px 0;color:#64748b}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav class="nav">
+    <a href="/super/shops" class="active">Shops</a>
+    <a href="/super/activity">Activity</a>
+    <a href="/super/logout">Logout</a>
+  </nav>
+
+  <div class="top">
+    <h1>Manage Shops</h1>
+    <a class="btn-new" href="/super/shops/new">+ New Shop</a>
+  </div>
+
+  {% if shops|length == 0 %}
+  <div class="empty"><p>No shops yet. Create your first one!</p></div>
+  {% endif %}
+
+  {% for s in shops %}
+  <div class="card">
+    <div class="card-top">
+      <span class="shop-name">{{ s.emoji }} {{ s.name }}</span>
+      {% if s.is_active %}
+      <span class="badge badge-active">Active</span>
+      {% else %}
+      <span class="badge badge-inactive">Inactive</span>
+      {% endif %}
+    </div>
+    <div class="stats">
+      <span>{{ s.customer_count or 0 }} customers</span>
+      <span>{{ s.stamp_count or 0 }} stamps</span>
+      <span>{{ s.max_stamps }} per card</span>
+      <span>PIN: {{ s.staff_pin }}</span>
+    </div>
+    <div class="links">
+      <a class="link-tap" href="/tap?nfc={{ s.nfc_tag }}" target="_blank">Tap Page</a>
+      <a class="link-staff" href="/staff?shop_id={{ s.nfc_tag }}&pin={{ s.staff_pin }}" target="_blank">Staff Portal</a>
+      <a class="link-owner" href="/owner/{{ s.nfc_tag }}?pin={{ s.staff_pin }}" target="_blank">Owner View</a>
+      <a class="link-edit" href="/super/shops/{{ s.id }}/edit">Edit</a>
+      <button class="link-copy" onclick="copyUrl(this, '/tap?nfc={{ s.nfc_tag }}')">Copy NFC URL</button>
+    </div>
+    {% if s.owner_name %}
+    <div class="meta">Owner: {{ s.owner_name }}{% if s.owner_phone %} ({{ s.owner_phone }}){% endif %}</div>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+<script>
+function copyUrl(btn, path) {
+  const url = location.origin + path;
+  navigator.clipboard.writeText(url).then(() => {
+    const orig = btn.textContent;
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = orig, 1500);
+  });
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TapRanked — Activity Feed</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,-apple-system,sans-serif;background:#0f172a;color:#e2e8f0;min-height:100vh}
+.wrap{max-width:800px;margin:0 auto;padding:24px 16px}
+.nav{display:flex;gap:12px;margin-bottom:24px}
+.nav a{color:#94a3b8;text-decoration:none;font-size:.85rem;padding:6px 12px;border-radius:6px;background:#1e293b}
+.nav a:hover,.nav a.active{background:#334155;color:#fff}
+h1{font-size:1.3rem;color:#fff;margin-bottom:20px}
+table{width:100%;border-collapse:collapse;font-size:.85rem}
+th{text-align:left;color:#64748b;padding:8px 10px;border-bottom:1px solid #334155;font-weight:600}
+td{padding:8px 10px;border-bottom:1px solid #1e293b;color:#cbd5e1}
+.action-stamp{color:#3b82f6}
+.action-redeem{color:#22c55e}
+.empty{text-align:center;padding:40px 0;color:#64748b}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav class="nav">
+    <a href="/super/shops">Shops</a>
+    <a href="/super/activity" class="active">Activity</a>
+    <a href="/super/logout">Logout</a>
+  </nav>
+
+  <h1>Recent Activity</h1>
+
+  {% if activity|length == 0 %}
+  <div class="empty"><p>No activity yet.</p></div>
+  {% else %}
+  <table>
+    <tr><th>Time</th><th>Shop</th><th>Customer</th><th>Action</th><th>Note</th></tr>
+    {% for a in activity %}
+    <tr>
+      <td>{{ a.timestamp }}</td>
+      <td>{{ a.shop_name }}</td>
+      <td>{{ a.phone }}</td>
+      <td class="{{ 'action-stamp' if a.action == 'stamp' else 'action-redeem' }}">{{ a.action }}</td>
+      <td>{{ a.note or '—' }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% endif %}
+</div>
+</body>
+</html>

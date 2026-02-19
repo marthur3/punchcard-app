@@ -115,6 +115,17 @@ CREATE TABLE IF NOT EXISTS shops (
     max_stamps INTEGER DEFAULT 10,
     nfc_tag TEXT UNIQUE NOT NULL,
     reward TEXT DEFAULT 'Free item',
+    staff_pin TEXT DEFAULT '0000',
+    emoji TEXT DEFAULT '☕',
+    is_active BOOLEAN DEFAULT true,
+    owner_name TEXT,
+    owner_phone TEXT,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS admin_sessions (
+    id TEXT PRIMARY KEY,
+    token TEXT UNIQUE NOT NULL,
     created_at TIMESTAMP DEFAULT NOW()
 );
 
@@ -175,6 +186,17 @@ CREATE TABLE IF NOT EXISTS shops (
     max_stamps INTEGER DEFAULT 10,
     nfc_tag TEXT UNIQUE NOT NULL,
     reward TEXT DEFAULT 'Free item',
+    staff_pin TEXT DEFAULT '0000',
+    emoji TEXT DEFAULT '☕',
+    is_active INTEGER DEFAULT 1,
+    owner_name TEXT,
+    owner_phone TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS admin_sessions (
+    id TEXT PRIMARY KEY,
+    token TEXT UNIQUE NOT NULL,
     created_at TEXT DEFAULT (datetime('now'))
 );
 
@@ -247,13 +269,24 @@ def init_db(app=None):
         else:
             db.executescript(_SCHEMA_SQLITE)
 
-        # Add rewards_redeemed to existing DBs that lack it
-        try:
-            execute(db, "ALTER TABLE cards ADD COLUMN rewards_redeemed INTEGER DEFAULT 0")
-            commit(db)
-        except Exception:
-            if _USE_POSTGRES:
-                db.rollback()
+        # Migrations — add columns to existing DBs that lack them
+        _migrations = [
+            "ALTER TABLE cards ADD COLUMN rewards_redeemed INTEGER DEFAULT 0",
+            "ALTER TABLE shops ADD COLUMN staff_pin TEXT DEFAULT '0000'",
+            "ALTER TABLE shops ADD COLUMN emoji TEXT DEFAULT '☕'",
+            ("ALTER TABLE shops ADD COLUMN is_active BOOLEAN DEFAULT true"
+             if _USE_POSTGRES else
+             "ALTER TABLE shops ADD COLUMN is_active INTEGER DEFAULT 1"),
+            "ALTER TABLE shops ADD COLUMN owner_name TEXT",
+            "ALTER TABLE shops ADD COLUMN owner_phone TEXT",
+        ]
+        for sql in _migrations:
+            try:
+                execute(db, sql)
+                commit(db)
+            except Exception:
+                if _USE_POSTGRES:
+                    db.rollback()
 
         # Seed demo shops if table is empty
         row = execute(db, "SELECT 1 FROM shops LIMIT 1").fetchone()
