@@ -558,6 +558,7 @@ def owner_dashboard(shop_nfc):
     )
     stamps_today = execute(db, today_q, (shop_id,)).fetchone()
 
+
     # Stamps this week
     week_q = (
         f"SELECT COUNT(*) AS cnt FROM stamp_log sl JOIN cards c ON sl.card_id = c.id "

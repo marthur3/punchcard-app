@@ -7,7 +7,7 @@ import { checkRateLimit, getClientIP } from '@/lib/rate-limit';
 
 export async function POST(request: NextRequest) {
   try {
-    const rateLimited = checkRateLimit(request, `login:${getClientIP(request)}`, 5, 15 * 60 * 1000);
+    const rateLimited = checkRateLimit(request, `login:${getClientIP(request)}`, 10, 15 * 60 * 1000);
     if (rateLimited) return rateLimited;
 
     const body = await request.json();

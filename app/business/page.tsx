@@ -16,7 +16,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { Store, Gift, Users, TrendingUp, Plus, Edit, CheckCircle, Trophy, LogOut, RefreshCw } from "lucide-react"
+import { Store, Gift, Users, TrendingUp, Plus, Edit, CheckCircle, LogOut, RefreshCw, Search, Phone, Mail, Award } from "lucide-react"
 import { isDemoMode } from "@/lib/supabase"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -54,6 +54,19 @@ interface Analytics {
   avgPunchesPerUser: number
 }
 
+interface Customer {
+  id: string
+  name: string
+  email: string
+  phone: string | null
+  current_punches: number
+  total_punches: number
+  prizes_redeemed: number
+  last_visit: string
+  joined_at: string
+  punch_card_id: string
+}
+
 export default function BusinessDashboard() {
   const [selectedBusiness, setSelectedBusiness] = useState<Business | null>(null)
   const [businesses, setBusinesses] = useState<Business[]>([])
@@ -61,6 +74,9 @@ export default function BusinessDashboard() {
   const [analytics, setAnalytics] = useState<Analytics | null>(null)
   const [businessLeaderboard, setBusinessLeaderboard] = useState<LeaderboardEntry[]>([])
   const [globalLeaderboard, setGlobalLeaderboard] = useState<LeaderboardEntry[]>([])
+  const [customers, setCustomers] = useState<Customer[]>([])
+  const [customerSearch, setCustomerSearch] = useState("")
+  const [customersLoading, setCustomersLoading] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [newPrize, setNewPrize] = useState({
     name: "",
@@ -200,6 +216,47 @@ export default function BusinessDashboard() {
     }
   }
 
+  const fetchCustomers = async (businessId: string) => {
+    setCustomersLoading(true)
+    try {
+      if (isDemoMode) {
+        const { demoUsers, demoPunchCards, demoPunches } = await import("@/lib/demo-data")
+        const businessCards = demoPunchCards.filter((c) => c.business_id === businessId)
+        const built: Customer[] = businessCards.map((card) => {
+          const user = demoUsers.find((u) => u.id === card.user_id)
+          const userPunches = demoPunches
+            .filter((p) => p.user_id === card.user_id && p.business_id === businessId)
+            .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+          return {
+            id: user?.id || card.user_id,
+            name: user?.name || "Unknown",
+            email: user?.email || "",
+            phone: user?.phone || null,
+            current_punches: card.current_punches,
+            total_punches: card.total_punches,
+            prizes_redeemed: 0,
+            last_visit: userPunches[0]?.created_at || card.updated_at,
+            joined_at: card.created_at,
+            punch_card_id: card.id,
+          }
+        })
+        built.sort((a, b) => b.total_punches - a.total_punches)
+        setCustomers(built)
+        return
+      }
+
+      const res = await fetch("/api/business/customers")
+      if (res.ok) {
+        const data = await res.json()
+        setCustomers(data.customers || [])
+      }
+    } catch (error) {
+      console.error("Error fetching customers:", error)
+    } finally {
+      setCustomersLoading(false)
+    }
+  }
+
   const addPrize = async () => {
     if (!selectedBusiness || !newPrize.name) return
 
@@ -288,6 +345,7 @@ export default function BusinessDashboard() {
     if (selectedBusiness) {
       fetchPrizes(selectedBusiness.id)
       fetchAnalytics(selectedBusiness.id)
+      fetchCustomers(selectedBusiness.id)
     }
   }, [selectedBusiness])
 
@@ -355,8 +413,8 @@ export default function BusinessDashboard() {
           <Tabs defaultValue="analytics" className="space-y-6" onValueChange={setActiveTab}>
             <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="analytics">Analytics</TabsTrigger>
-              <TabsTrigger value="leaderboard">Leaderboard</TabsTrigger>
-              <TabsTrigger value="prizes">Manage Prizes</TabsTrigger>
+              <TabsTrigger value="customers">Customers</TabsTrigger>
+              <TabsTrigger value="prizes">Prizes</TabsTrigger>
               <TabsTrigger value="nfc">NFC Tags</TabsTrigger>
             </TabsList>
 
@@ -427,152 +485,172 @@ export default function BusinessDashboard() {
 
             </TabsContent>
 
-            <TabsContent value="leaderboard">
-              <div className="grid md:grid-cols-2 gap-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Trophy className="h-5 w-5 text-blue-600" />
-                      Your Business Leaderboard
-                    </CardTitle>
-                    <CardDescription>Top customers at {selectedBusiness.name}</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    {businessLeaderboard.length === 0 ? (
-                      <div className="text-center py-8">
-                        <Trophy className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                        <p className="text-gray-600">No leaderboard data available</p>
-                      </div>
-                    ) : (
-                      <div className="space-y-3">
-                        {businessLeaderboard.slice(0, 8).map((entry, index) => (
-                          <div
-                            key={entry.user_id}
-                            className={`flex items-center justify-between p-3 rounded-lg border ${
-                              index < 3 ? "bg-gradient-to-r from-yellow-50 to-orange-50 border-yellow-200" : "bg-gray-50 border-gray-200"
-                            }`}
-                          >
-                            <div className="flex items-center gap-3">
-                              <div className={`flex items-center justify-center w-8 h-8 rounded-full font-bold text-white ${
-                                index === 0 ? "bg-yellow-500" :
-                                index === 1 ? "bg-gray-400" :
-                                index === 2 ? "bg-amber-600" :
-                                "bg-gray-300 text-gray-700"
-                              }`}>
-                                {entry.rank}
-                              </div>
-                              <div>
-                                <div className="flex items-center gap-2">
-                                  <span className="font-semibold text-sm">{entry.display_name}</span>
-                                  {entry.badge && <span className="text-sm">{entry.badge}</span>}
-                                </div>
-                                <div className="text-xs text-gray-600">
-                                  {entry.total_punches} visits
-                                </div>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <div className="font-semibold">{entry.total_punches}</div>
-                              <div className="text-xs text-gray-500">punches</div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <TrendingUp className="h-5 w-5 text-green-600" />
-                      Global Leaderboard
-                    </CardTitle>
-                    <CardDescription>See how your customers rank globally</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-3">
-                      {globalLeaderboard.slice(0, 5).map((entry, index) => {
-                        const isYourCustomer = businessLeaderboard.some(c => c.user_id === entry.user_id)
-                        return (
-                          <div
-                            key={entry.user_id}
-                            className={`flex items-center justify-between p-3 rounded-lg border ${
-                              isYourCustomer ? "bg-blue-50 border-blue-200" : "bg-gray-50 border-gray-200"
-                            }`}
-                          >
-                            <div className="flex items-center gap-3">
-                              <div className={`flex items-center justify-center w-8 h-8 rounded-full font-bold text-white ${
-                                index === 0 ? "bg-yellow-500" :
-                                index === 1 ? "bg-gray-400" :
-                                index === 2 ? "bg-amber-600" :
-                                "bg-gray-300 text-gray-700"
-                              }`}>
-                                {entry.rank}
-                              </div>
-                              <div>
-                                <div className="flex items-center gap-2">
-                                  <span className="font-semibold text-sm">{entry.display_name}</span>
-                                  {entry.badge && <span className="text-sm">{entry.badge}</span>}
-                                  {isYourCustomer && (
-                                    <Badge variant="outline" className="text-xs">Your Customer</Badge>
-                                  )}
-                                </div>
-                                <div className="text-xs text-gray-600">
-                                  {entry.businesses_visited} businesses
-                                </div>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <div className="font-semibold">{entry.total_punches}</div>
-                              <div className="text-xs text-gray-500">total</div>
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                    
-                    <div className="mt-4 p-3 bg-blue-50 rounded-lg">
-                      <p className="text-sm text-blue-800">
-                        <strong>Pro Tip:</strong> Your customers highlighted in blue are also active at other businesses. Consider cross-promotions!
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-
-              <Card className="mt-6">
+            <TabsContent value="customers">
+              <Card>
                 <CardHeader>
-                  <CardTitle>Leaderboard Analytics</CardTitle>
-                  <CardDescription>Understand how competition drives customer behavior</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid md:grid-cols-4 gap-4">
-                    <div className="text-center p-4 bg-gray-50 rounded-lg">
-                      <div className="text-2xl font-bold text-gray-900">{businessLeaderboard.length}</div>
-                      <div className="text-sm text-gray-600">Active Competitors</div>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="flex items-center gap-2">
+                        <Users className="h-5 w-5 text-blue-600" />
+                        Customer List
+                      </CardTitle>
+                      <CardDescription>
+                        {customers.length} members at {selectedBusiness.name}
+                      </CardDescription>
                     </div>
-                    <div className="text-center p-4 bg-gray-50 rounded-lg">
-                      <div className="text-2xl font-bold text-gray-900">
-                        {businessLeaderboard.length > 0 ? Math.round(businessLeaderboard.reduce((sum, entry) => sum + entry.total_punches, 0) / businessLeaderboard.length) : 0}
-                      </div>
-                      <div className="text-sm text-gray-600">Avg Visits per Customer</div>
-                    </div>
-                    <div className="text-center p-4 bg-gray-50 rounded-lg">
-                      <div className="text-2xl font-bold text-gray-900">
-                        {businessLeaderboard.filter(entry => entry.tier === 'gold' || entry.tier === 'platinum').length}
-                      </div>
-                      <div className="text-sm text-gray-600">VIP Customers</div>
-                    </div>
-                    <div className="text-center p-4 bg-gray-50 rounded-lg">
-                      <div className="text-2xl font-bold text-gray-900">
-                        {globalLeaderboard.filter(entry => businessLeaderboard.some(c => c.user_id === entry.user_id)).length}
-                      </div>
-                      <div className="text-sm text-gray-600">Multi-Business Customers</div>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      <input
+                        type="text"
+                        placeholder="Search customers..."
+                        value={customerSearch}
+                        onChange={(e) => setCustomerSearch(e.target.value)}
+                        className="pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-56"
+                      />
                     </div>
                   </div>
+                </CardHeader>
+                <CardContent>
+                  {customersLoading ? (
+                    <div className="flex justify-center py-12">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
+                    </div>
+                  ) : customers.length === 0 ? (
+                    <div className="text-center py-12">
+                      <Users className="h-12 w-12 text-gray-300 mx-auto mb-3" />
+                      <p className="text-gray-500 font-medium">No customers yet</p>
+                      <p className="text-sm text-gray-400 mt-1">Customers will appear here after their first tap.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {customers
+                        .filter((c) => {
+                          const q = customerSearch.toLowerCase()
+                          return (
+                            !q ||
+                            c.name?.toLowerCase().includes(q) ||
+                            c.email?.toLowerCase().includes(q) ||
+                            c.phone?.includes(q)
+                          )
+                        })
+                        .map((customer, index) => {
+                          const lastVisitDate = new Date(customer.last_visit)
+                          const daysSince = Math.floor((Date.now() - lastVisitDate.getTime()) / (1000 * 60 * 60 * 24))
+                          const isVIP = customer.total_punches >= 20
+                          const isAtRisk = daysSince > 14
+
+                          return (
+                            <div
+                              key={customer.id}
+                              className="flex items-center justify-between p-4 rounded-xl border border-gray-100 hover:bg-gray-50 transition-colors"
+                            >
+                              <div className="flex items-center gap-4">
+                                {/* Rank / Avatar */}
+                                <div
+                                  className="flex items-center justify-center w-9 h-9 rounded-full text-sm font-bold text-white flex-shrink-0"
+                                  style={{ background: index === 0 ? '#f59e0b' : index === 1 ? '#9ca3af' : index === 2 ? '#b45309' : '#e5e7eb', color: index < 3 ? '#fff' : '#6b7280' }}
+                                >
+                                  {index + 1}
+                                </div>
+
+                                {/* Info */}
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-semibold text-sm text-gray-900">{customer.name}</span>
+                                    {isVIP && (
+                                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-700">
+                                        <Award className="h-2.5 w-2.5" /> VIP
+                                      </span>
+                                    )}
+                                    {isAtRisk && (
+                                      <span className="inline-flex px-1.5 py-0.5 rounded text-[10px] font-semibold bg-red-100 text-red-700">
+                                        At Risk
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-3 mt-0.5">
+                                    {customer.email && (
+                                      <span className="flex items-center gap-1 text-xs text-gray-500">
+                                        <Mail className="h-3 w-3" />
+                                        {customer.email}
+                                      </span>
+                                    )}
+                                    {customer.phone && (
+                                      <span className="flex items-center gap-1 text-xs text-gray-500">
+                                        <Phone className="h-3 w-3" />
+                                        {customer.phone}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Stats */}
+                              <div className="flex items-center gap-6 text-right">
+                                <div>
+                                  <div className="text-sm font-bold text-gray-900">{customer.current_punches}/{selectedBusiness.max_punches}</div>
+                                  <div className="text-[10px] text-gray-400 uppercase tracking-wide">Current</div>
+                                </div>
+                                <div>
+                                  <div className="text-sm font-bold text-gray-900">{customer.total_punches}</div>
+                                  <div className="text-[10px] text-gray-400 uppercase tracking-wide">Lifetime</div>
+                                </div>
+                                <div>
+                                  <div className="text-sm font-medium text-gray-700">
+                                    {daysSince === 0 ? 'Today' : daysSince === 1 ? 'Yesterday' : `${daysSince}d ago`}
+                                  </div>
+                                  <div className="text-[10px] text-gray-400 uppercase tracking-wide">Last Visit</div>
+                                </div>
+                                {customer.prizes_redeemed > 0 && (
+                                  <div>
+                                    <div className="text-sm font-bold text-emerald-600">{customer.prizes_redeemed}</div>
+                                    <div className="text-[10px] text-gray-400 uppercase tracking-wide">Redeemed</div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        })}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
+
+              {/* Summary stats */}
+              {customers.length > 0 && (
+                <div className="grid grid-cols-3 gap-4 mt-4">
+                  <Card>
+                    <CardContent className="p-4 text-center">
+                      <div className="text-2xl font-bold text-gray-900">{customers.filter(c => c.total_punches >= 20).length}</div>
+                      <div className="text-sm text-gray-500">VIP Members</div>
+                      <div className="text-xs text-gray-400">20+ lifetime visits</div>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-4 text-center">
+                      <div className="text-2xl font-bold text-red-500">
+                        {customers.filter(c => {
+                          const days = Math.floor((Date.now() - new Date(c.last_visit).getTime()) / (1000 * 60 * 60 * 24))
+                          return days > 14
+                        }).length}
+                      </div>
+                      <div className="text-sm text-gray-500">At Risk</div>
+                      <div className="text-xs text-gray-400">No visit in 14+ days</div>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-4 text-center">
+                      <div className="text-2xl font-bold text-blue-600">
+                        {customers.length > 0
+                          ? Math.round(customers.reduce((s, c) => s + c.total_punches, 0) / customers.length)
+                          : 0}
+                      </div>
+                      <div className="text-sm text-gray-500">Avg Visits</div>
+                      <div className="text-xs text-gray-400">per member</div>
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
             </TabsContent>
 
             <TabsContent value="prizes">

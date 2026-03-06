@@ -2,11 +2,9 @@
 
 import { Suspense, useState, useEffect, useCallback } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { CreditCard, Gift, History, LogOut, Star, Trophy, Calendar, Zap, Crown, Settings, CheckCircle, X } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
@@ -65,7 +63,7 @@ interface LeaderboardEntry {
 
 export default function DashboardPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div></div>}>
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-gray-900"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-400"></div></div>}>
       <DashboardContent />
     </Suspense>
   )
@@ -83,6 +81,7 @@ function DashboardContent() {
   const [isLoading, setIsLoading] = useState(true)
   const [redeemSuccess, setRedeemSuccess] = useState("")
   const [showWelcome, setShowWelcome] = useState(false)
+  const [activeTab, setActiveTab] = useState("cards")
   const router = useRouter()
   const searchParams = useSearchParams()
   const welcome = searchParams?.get("welcome")
@@ -93,10 +92,8 @@ function DashboardContent() {
     setIsLoading(true)
     try {
       if (isDemoMode) {
-        // Demo mode: use local demo data
         const { demoPunchCards, demoPrizes, demoPunches, generateLeaderboardData, demoBusinesses } = await import("@/lib/demo-data")
 
-        // Load registered businesses and prizes from localStorage
         const registeredBusinesses = typeof window !== "undefined"
           ? JSON.parse(localStorage.getItem("demo_registered_businesses") || "[]")
           : []
@@ -122,7 +119,6 @@ function DashboardContent() {
           }
         })
 
-        // Enrich cards with business info from both demo and registered businesses
         const enrichedCards = userCards.map((card: any) => {
           if (card.business?.name) return card
           const biz = allBusinesses.find((b: any) => b.id === card.business_id)
@@ -161,7 +157,6 @@ function DashboardContent() {
         setIsLeaderboardOptedIn(userSettings.opted_in || false)
         setUserDisplayName(userSettings.display_name || user.name)
       } else {
-        // Real mode: fetch from API
         const [cardsRes, leaderboardRes] = await Promise.all([
           fetch("/api/punch-cards"),
           fetch("/api/leaderboard?limit=10"),
@@ -170,7 +165,6 @@ function DashboardContent() {
         if (cardsRes.ok) {
           const cardsData = await cardsRes.json()
 
-          // Transform punch cards
           const cards = (cardsData.punch_cards || []).map((card: any) => {
             const biz = card.businesses || card.business
             return {
@@ -187,7 +181,6 @@ function DashboardContent() {
           })
           setPunchCards(cards)
 
-          // Get available prizes for each business
           const allPrizes: Prize[] = []
           for (const card of cards) {
             const prizesRes = await fetch(`/api/prizes?business_id=${card.business.id}`)
@@ -205,7 +198,6 @@ function DashboardContent() {
           }
           setAvailablePrizes(allPrizes)
 
-          // Transform punch history
           const history = (cardsData.recent_punches || []).map((p: any) => ({
             id: p.id,
             created_at: p.created_at,
@@ -213,7 +205,6 @@ function DashboardContent() {
           }))
           setPunchHistory(history)
 
-          // Transform redeemed prizes
           const redeemed = (cardsData.redeemed_prizes || []).map((r: any) => ({
             id: r.id,
             redeemed_at: r.redeemed_at,
@@ -243,11 +234,9 @@ function DashboardContent() {
   const redeemPrize = async (prizeId: string, businessId: string) => {
     try {
       if (isDemoMode) {
-        // Demo mode: deduct punches, record redemption, show success
         const prize = availablePrizes.find(p => p.id === prizeId)
         if (!prize || !user) return
 
-        // Deduct punches from the card
         const savedCards = JSON.parse(localStorage.getItem("demo_punch_cards") || "[]")
         const cardIndex = savedCards.findIndex((c: any) => c.user_id === user.id && c.business_id === businessId)
         if (cardIndex >= 0) {
@@ -255,7 +244,6 @@ function DashboardContent() {
           localStorage.setItem("demo_punch_cards", JSON.stringify(savedCards))
         }
 
-        // Record redemption
         const redeemed = JSON.parse(localStorage.getItem("demo_redeemed_prizes") || "[]")
         redeemed.push({
           id: `redeemed-${Date.now()}`,
@@ -321,10 +309,10 @@ function DashboardContent() {
 
   if (authLoading || isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading your dashboard...</p>
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-amber-400 mx-auto mb-3"></div>
+          <p className="text-gray-400 text-sm">Loading your dashboard...</p>
         </div>
       </div>
     )
@@ -334,432 +322,437 @@ function DashboardContent() {
     return null
   }
 
+  const tabs = [
+    { id: "cards", label: "Cards", icon: CreditCard, count: punchCards.length },
+    { id: "rewards", label: "Rewards", icon: Gift, count: availablePrizes.length },
+    { id: "leaderboard", label: "Rankings", icon: Crown },
+    { id: "history", label: "History", icon: History },
+    { id: "redeemed", label: "Redeemed", icon: Trophy, count: redeemedPrizes.length },
+  ]
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 p-4">
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="flex justify-between items-center mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Welcome back, {user.name}!</h1>
-            <p className="text-gray-700">
-              Manage your punch cards and rewards
-              {isDemoMode && <Badge className="ml-2 bg-amber-100 text-amber-800 border-amber-200">Demo Mode</Badge>}
-            </p>
+    <div className="min-h-screen bg-gray-50">
+      {/* Dark header */}
+      <div className="bg-gradient-to-b from-gray-900 to-gray-800">
+        <div className="max-w-2xl mx-auto px-4 pt-6 pb-4">
+          <div className="flex justify-between items-start mb-4">
+            <div>
+              <h1 className="text-xl font-bold text-white">Hey, {user.name}</h1>
+              <p className="text-gray-400 text-sm">
+                Manage your cards & rewards
+                {isDemoMode && <Badge className="ml-2 bg-amber-400/20 text-amber-300 border-amber-400/30 text-[10px]">Demo</Badge>}
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                onClick={() => router.push("/tap")}
+                className="bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs h-8"
+              >
+                <Zap className="h-3.5 w-3.5 mr-1" />
+                Tap
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={handleLogout}
+                className="text-gray-400 hover:text-white hover:bg-white/10 rounded-lg h-8"
+              >
+                <LogOut className="h-3.5 w-3.5" />
+              </Button>
+            </div>
           </div>
-          <div className="flex gap-4">
-            <Button
-              variant="outline"
-              onClick={() => router.push("/tap")}
-              className="border-gray-300 text-gray-700 hover:bg-gray-50"
-            >
-              <Zap className="h-4 w-4 mr-2" />
-              Tap NFC
-            </Button>
-            <Button
-              variant="outline"
-              onClick={handleLogout}
-              className="border-gray-300 text-gray-700 hover:bg-gray-50 bg-transparent"
-            >
-              <LogOut className="h-4 w-4 mr-2" />
-              Sign Out
-            </Button>
+
+          {/* Tab navigation in header */}
+          <div className="flex gap-1 overflow-x-auto pb-1 -mb-4 relative z-10">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-t-lg whitespace-nowrap transition-colors ${
+                  activeTab === tab.id
+                    ? "bg-gray-50 text-gray-900"
+                    : "text-gray-400 hover:text-gray-300 hover:bg-white/5"
+                }`}
+              >
+                <tab.icon className="h-3.5 w-3.5" />
+                {tab.label}
+                {tab.count !== undefined && tab.count > 0 && (
+                  <span className={`px-1.5 py-0.5 text-[10px] font-bold rounded-full ${
+                    activeTab === tab.id ? "bg-amber-100 text-amber-700" : "bg-white/10 text-gray-400"
+                  }`}>
+                    {tab.count}
+                  </span>
+                )}
+              </button>
+            ))}
           </div>
         </div>
+      </div>
 
+      <div className="max-w-2xl mx-auto px-4 py-6">
         {showWelcome && (
-          <Card className="mb-6 border border-green-200 shadow-sm bg-green-50">
-            <CardContent className="pt-6">
-              <div className="flex items-start justify-between">
-                <div>
-                  <h3 className="text-lg font-semibold text-green-900 mb-2">Welcome to TapRanked!</h3>
-                  <p className="text-sm text-green-700 mb-4">Here's how to get started:</p>
-                  <ol className="space-y-2 text-sm text-green-800">
-                    <li className="flex items-center gap-2">
-                      <CheckCircle className="h-4 w-4 text-green-600 flex-shrink-0" />
-                      Visit a participating business and tap their NFC tag
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <CheckCircle className="h-4 w-4 text-green-600 flex-shrink-0" />
-                      Collect punches with every visit
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <CheckCircle className="h-4 w-4 text-green-600 flex-shrink-0" />
-                      Earn rewards and climb the leaderboard
-                    </li>
-                  </ol>
-                  <Button
-                    size="sm"
-                    className="mt-4 bg-green-600 hover:bg-green-700 text-white"
-                    onClick={() => router.push("/tap")}
-                  >
-                    <Zap className="h-4 w-4 mr-2" />
-                    Find NFC Locations
-                  </Button>
-                </div>
-                <button onClick={() => setShowWelcome(false)} className="text-green-600 hover:text-green-800">
-                  <X className="h-4 w-4" />
-                </button>
+          <div className="mb-6 p-4 bg-emerald-50 border border-emerald-200 rounded-xl flex items-start justify-between">
+            <div className="flex items-start gap-3">
+              <CheckCircle className="h-5 w-5 text-emerald-600 mt-0.5 flex-shrink-0" />
+              <div>
+                <h3 className="font-semibold text-emerald-900 mb-1">Welcome to TapRanked!</h3>
+                <ol className="space-y-1 text-sm text-emerald-700">
+                  <li>1. Visit a business and tap their NFC tag</li>
+                  <li>2. Collect punches with every visit</li>
+                  <li>3. Earn rewards and climb the leaderboard</li>
+                </ol>
+                <Button
+                  size="sm"
+                  className="mt-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs"
+                  onClick={() => router.push("/tap")}
+                >
+                  <Zap className="h-3.5 w-3.5 mr-1" />
+                  Find NFC Locations
+                </Button>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+            <button onClick={() => setShowWelcome(false)} className="text-emerald-400 hover:text-emerald-600">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
         )}
 
-        <Tabs defaultValue="cards" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5 bg-gray-100 p-1">
-            <TabsTrigger value="cards" className="data-[state=active]:bg-white data-[state=active]:text-gray-900 text-gray-600">
-              My Cards
-            </TabsTrigger>
-            <TabsTrigger value="rewards" className="data-[state=active]:bg-white data-[state=active]:text-gray-900 text-gray-600">
-              Available Rewards
-            </TabsTrigger>
-            <TabsTrigger value="leaderboard" className="data-[state=active]:bg-white data-[state=active]:text-gray-900 text-gray-600">
-              Leaderboard
-            </TabsTrigger>
-            <TabsTrigger value="history" className="data-[state=active]:bg-white data-[state=active]:text-gray-900 text-gray-600">
-              History
-            </TabsTrigger>
-            <TabsTrigger value="redeemed" className="data-[state=active]:bg-white data-[state=active]:text-gray-900 text-gray-600">
-              Redeemed
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="cards">
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {punchCards.length === 0 ? (
-                <Card className="col-span-full">
-                  <CardContent className="text-center py-12">
-                    <CreditCard className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                    <h3 className="text-lg font-semibold mb-2">No Punch Cards Yet</h3>
-                    <p className="text-gray-600 mb-4">Start collecting punches at participating businesses</p>
-                    <Button onClick={() => router.push("/tap")}>
-                      <Zap className="h-4 w-4 mr-2" />
-                      Find NFC Locations
-                    </Button>
-                  </CardContent>
-                </Card>
-              ) : (
-                punchCards.map((card) => (
-                  <Card key={card.id} className="border border-gray-200 shadow-sm bg-white">
-                    <CardHeader>
-                      <CardTitle className="text-lg text-gray-900">{card.business.name}</CardTitle>
-                      <CardDescription className="text-gray-600">{card.business.description}</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-center mb-4">
-                        <div className="text-3xl font-bold text-blue-600 mb-2">
-                          {card.current_punches}/{card.business.max_punches}
+        {/* Cards Tab */}
+        {activeTab === "cards" && (
+          <div className="space-y-4">
+            {punchCards.length === 0 ? (
+              <div className="bg-white rounded-2xl border border-gray-100 p-8 text-center">
+                <CreditCard className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                <h3 className="font-semibold text-gray-900 mb-1">No Punch Cards Yet</h3>
+                <p className="text-sm text-gray-500 mb-4">Start collecting punches at participating businesses</p>
+                <Button onClick={() => router.push("/tap")} className="bg-gray-900 hover:bg-gray-800 text-white rounded-xl">
+                  <Zap className="h-4 w-4 mr-2" />
+                  Find Locations
+                </Button>
+              </div>
+            ) : (
+              punchCards.map((card) => {
+                const progress = (card.current_punches / card.business.max_punches) * 100
+                const isComplete = card.current_punches >= card.business.max_punches
+                return (
+                  <div key={card.id} className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
+                    <div className="flex items-start justify-between mb-4">
+                      <div>
+                        <h3 className="font-bold text-gray-900">{card.business.name}</h3>
+                        <p className="text-xs text-gray-500">{card.business.description}</p>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-2xl font-bold text-gray-900">
+                          {card.current_punches}<span className="text-gray-400 text-sm font-normal">/{card.business.max_punches}</span>
                         </div>
-                        <Progress value={(card.current_punches / card.business.max_punches) * 100} className="mb-2" />
-                        <Badge variant="secondary" className="bg-gray-100 text-gray-700">
-                          Total: {card.total_punches} punches
-                        </Badge>
-                      </div>
-
-                      <div className="grid grid-cols-5 gap-1 mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                        {Array.from({ length: card.business.max_punches }).map((_, index) => (
-                          <div
-                            key={index}
-                            className={`aspect-square rounded-full border-2 flex items-center justify-center text-xs ${
-                              index < card.current_punches
-                                ? "bg-blue-500 border-blue-500 text-white"
-                                : "border-gray-300 bg-white"
-                            }`}
-                          >
-                            {index < card.current_punches && <Star className="h-3 w-3 fill-current" />}
-                          </div>
-                        ))}
-                      </div>
-
-                      {card.current_punches >= card.business.max_punches && (
-                        <Badge className="w-full justify-center bg-emerald-500 hover:bg-emerald-600 text-white">
-                          <Trophy className="h-4 w-4 mr-2" />
-                          Card Complete!
-                        </Badge>
-                      )}
-
-                      <Link
-                        href={`/leaderboard/${card.business.id}`}
-                        className="block text-center text-xs text-orange-600 hover:text-orange-700 font-medium mt-3"
-                      >
-                        <Trophy className="h-3 w-3 inline mr-1" />
-                        View Rankings
-                      </Link>
-                    </CardContent>
-                  </Card>
-                ))
-              )}
-            </div>
-          </TabsContent>
-
-          <TabsContent value="rewards">
-            {redeemSuccess && (
-              <Alert className="mb-4 border-green-200 bg-green-50">
-                <CheckCircle className="h-4 w-4 text-green-600" />
-                <AlertDescription className="text-green-800">{redeemSuccess}</AlertDescription>
-              </Alert>
-            )}
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {availablePrizes.length === 0 ? (
-                <Card className="col-span-full">
-                  <CardContent className="text-center py-12">
-                    <Gift className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                    <h3 className="text-lg font-semibold mb-2">No Rewards Available</h3>
-                    <p className="text-gray-600">Keep collecting punches to unlock rewards!</p>
-                  </CardContent>
-                </Card>
-              ) : (
-                availablePrizes.map((prize) => (
-                  <Card key={prize.id} className="border border-emerald-200 shadow-sm bg-emerald-50">
-                    <CardHeader>
-                      <CardTitle className="text-lg flex items-center gap-2 text-gray-900">
-                        <Gift className="h-5 w-5 text-emerald-600" />
-                        {prize.name}
-                      </CardTitle>
-                      <CardDescription className="text-gray-700">{prize.business_name}</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <p className="text-sm text-gray-700 mb-4">{prize.description}</p>
-                      <div className="flex justify-between items-center">
-                        <Badge className="bg-emerald-500 hover:bg-emerald-600 text-white">
-                          {prize.punches_required} punches required
-                        </Badge>
-                        <Button
-                          size="sm"
-                          className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                          onClick={() => redeemPrize(prize.id, prize.business_id)}
-                        >
-                          Redeem Now
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))
-              )}
-            </div>
-          </TabsContent>
-
-          <TabsContent value="leaderboard">
-            <div className="space-y-6">
-              <Card className="border-2 border-dashed border-gray-200">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Settings className="h-5 w-5" />
-                    Leaderboard Settings
-                  </CardTitle>
-                  <CardDescription>
-                    Join the leaderboard to compete with other loyal customers!
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                    <div>
-                      <h4 className="font-semibold">Participate in Leaderboard</h4>
-                      <p className="text-sm text-gray-600">
-                        {isLeaderboardOptedIn
-                          ? "You're currently visible on the public leaderboard"
-                          : "You're not participating in the leaderboard"}
-                      </p>
-                    </div>
-                    <Button
-                      variant={isLeaderboardOptedIn ? "destructive" : "default"}
-                      onClick={() => updateLeaderboardSettings(!isLeaderboardOptedIn, userDisplayName)}
-                    >
-                      {isLeaderboardOptedIn ? "Opt Out" : "Join Leaderboard"}
-                    </Button>
-                  </div>
-
-                  {isLeaderboardOptedIn && (
-                    <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-                      <h4 className="font-semibold mb-2">Display Name</h4>
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          value={userDisplayName}
-                          onChange={(e) => setUserDisplayName(e.target.value)}
-                          className="flex-1 px-3 py-2 border rounded-md"
-                          placeholder="Enter your display name"
-                        />
-                        <Button
-                          variant="outline"
-                          onClick={() => updateLeaderboardSettings(isLeaderboardOptedIn, userDisplayName)}
-                        >
-                          Update
-                        </Button>
                       </div>
                     </div>
-                  )}
-                </CardContent>
-              </Card>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Crown className="h-5 w-5 text-yellow-500" />
-                    Global Leaderboard
-                  </CardTitle>
-                  <CardDescription>Top loyal customers across all businesses</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {leaderboardData.length === 0 ? (
-                    <div className="text-center py-8">
-                      <Crown className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                      <p className="text-gray-600">No leaderboard data available</p>
+                    <div className="mb-3">
+                      <Progress value={progress} className="h-2" />
                     </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {leaderboardData.slice(0, 10).map((entry, index) => (
+
+                    {/* Punch dots */}
+                    <div className="flex flex-wrap gap-1.5 mb-4">
+                      {Array.from({ length: card.business.max_punches }).map((_, index) => (
                         <div
-                          key={entry.user_id}
-                          className={`flex items-center justify-between p-4 rounded-lg border-2 ${
-                            entry.user_id === user?.id
-                              ? "bg-blue-50 border-blue-200"
-                              : "bg-gray-50 border-gray-200"
+                          key={index}
+                          className={`w-7 h-7 rounded-full border-2 flex items-center justify-center ${
+                            index < card.current_punches
+                              ? "bg-amber-400 border-amber-400 text-white"
+                              : "border-gray-200 bg-gray-50"
                           }`}
                         >
-                          <div className="flex items-center gap-4">
-                            <div className={`flex items-center justify-center w-8 h-8 rounded-full font-bold text-white ${
-                              index === 0 ? "bg-yellow-500" :
-                              index === 1 ? "bg-gray-400" :
-                              index === 2 ? "bg-amber-600" :
-                              "bg-gray-300 text-gray-700"
-                            }`}>
-                              {entry.rank}
-                            </div>
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <span className="font-semibold">{entry.display_name}</span>
-                                {entry.badge && <span className="text-lg">{entry.badge}</span>}
-                                {entry.user_id === user?.id && (
-                                  <Badge variant="outline" className="text-xs">You</Badge>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-4 text-sm text-gray-600">
-                                <span>{entry.total_punches} total punches</span>
-                                {entry.businesses_visited && <span>{entry.businesses_visited} businesses</span>}
-                                <Badge
-                                  variant="secondary"
-                                  className={`text-xs ${
-                                    entry.tier === 'platinum' ? 'bg-purple-100 text-purple-800' :
-                                    entry.tier === 'gold' ? 'bg-yellow-100 text-yellow-800' :
-                                    entry.tier === 'silver' ? 'bg-gray-100 text-gray-800' :
-                                    'bg-amber-100 text-amber-800'
-                                  }`}
-                                >
-                                  {entry.tier}
-                                </Badge>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <div className="font-semibold text-lg">{entry.total_punches}</div>
-                            <div className="text-xs text-gray-500">punches</div>
-                          </div>
+                          {index < card.current_punches && <Star className="h-3 w-3 fill-current" />}
                         </div>
                       ))}
                     </div>
-                  )}
-                </CardContent>
-              </Card>
 
-              {!isLeaderboardOptedIn && (
-                <Card className="border-yellow-200 bg-yellow-50">
-                  <CardContent className="p-6 text-center">
-                    <Crown className="h-12 w-12 text-yellow-500 mx-auto mb-4" />
-                    <h3 className="text-lg font-semibold mb-2">Join the Competition!</h3>
-                    <p className="text-gray-600 mb-4">
-                      Opt into the leaderboard to compete with other customers!
+                    <div className="flex items-center justify-between">
+                      {isComplete ? (
+                        <Badge className="bg-emerald-500 text-white">
+                          <Trophy className="h-3 w-3 mr-1" />
+                          Card Complete!
+                        </Badge>
+                      ) : (
+                        <span className="text-xs text-gray-400">{card.total_punches} total visits</span>
+                      )}
+                      <Link
+                        href={`/leaderboard/${card.business.id}`}
+                        className="text-xs text-amber-600 hover:text-amber-700 font-medium flex items-center gap-1"
+                      >
+                        <Trophy className="h-3 w-3" />
+                        Rankings
+                      </Link>
+                    </div>
+                  </div>
+                )
+              })
+            )}
+          </div>
+        )}
+
+        {/* Rewards Tab */}
+        {activeTab === "rewards" && (
+          <div className="space-y-4">
+            {redeemSuccess && (
+              <Alert className="border-emerald-200 bg-emerald-50 rounded-xl">
+                <CheckCircle className="h-4 w-4 text-emerald-600" />
+                <AlertDescription className="text-emerald-800">{redeemSuccess}</AlertDescription>
+              </Alert>
+            )}
+            {availablePrizes.length === 0 ? (
+              <div className="bg-white rounded-2xl border border-gray-100 p-8 text-center">
+                <Gift className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                <h3 className="font-semibold text-gray-900 mb-1">No Rewards Available</h3>
+                <p className="text-sm text-gray-500">Keep collecting punches to unlock rewards!</p>
+              </div>
+            ) : (
+              availablePrizes.map((prize) => (
+                <div key={prize.id} className="bg-white rounded-2xl border border-emerald-200 p-5 shadow-sm">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center">
+                        <Gift className="h-5 w-5 text-emerald-600" />
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-gray-900">{prize.name}</h3>
+                        <p className="text-xs text-gray-500">{prize.business_name}</p>
+                      </div>
+                    </div>
+                    <Badge className="bg-emerald-100 text-emerald-700 text-[10px]">
+                      {prize.punches_required} punches
+                    </Badge>
+                  </div>
+                  <p className="text-sm text-gray-600 mb-3">{prize.description}</p>
+                  <Button
+                    size="sm"
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl"
+                    onClick={() => redeemPrize(prize.id, prize.business_id)}
+                  >
+                    Redeem Now
+                  </Button>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {/* Leaderboard Tab */}
+        {activeTab === "leaderboard" && (
+          <div className="space-y-4">
+            {/* Settings card */}
+            <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center">
+                    <Settings className="h-5 w-5 text-gray-600" />
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-gray-900 text-sm">Leaderboard</h4>
+                    <p className="text-xs text-gray-500">
+                      {isLeaderboardOptedIn ? "You're visible on leaderboards" : "Not participating"}
                     </p>
-                    <Button onClick={() => updateLeaderboardSettings(true, user?.name || '')}>
-                      <Crown className="h-4 w-4 mr-2" />
-                      Join Leaderboard
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  variant={isLeaderboardOptedIn ? "outline" : "default"}
+                  onClick={() => updateLeaderboardSettings(!isLeaderboardOptedIn, userDisplayName)}
+                  className={isLeaderboardOptedIn
+                    ? "border-gray-200 text-gray-600 rounded-lg text-xs"
+                    : "bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs"
+                  }
+                >
+                  {isLeaderboardOptedIn ? "Opt Out" : "Join"}
+                </Button>
+              </div>
+
+              {isLeaderboardOptedIn && (
+                <div className="mt-4 pt-4 border-t border-gray-100">
+                  <label className="text-xs font-medium text-gray-600 mb-1.5 block">Display Name</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={userDisplayName}
+                      onChange={(e) => setUserDisplayName(e.target.value)}
+                      className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50 focus:bg-white focus:border-amber-400 focus:ring-1 focus:ring-amber-400 outline-none"
+                      placeholder="Enter display name"
+                    />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => updateLeaderboardSettings(isLeaderboardOptedIn, userDisplayName)}
+                      className="border-gray-200 rounded-lg text-xs"
+                    >
+                      Save
                     </Button>
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               )}
             </div>
-          </TabsContent>
 
-          <TabsContent value="history">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <History className="h-5 w-5" />
-                  Recent Punches
-                </CardTitle>
-                <CardDescription>Your latest punch card activity</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {punchHistory.length === 0 ? (
-                  <div className="text-center py-8">
-                    <History className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-600">No punch history yet</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {punchHistory.map((punch) => (
-                      <div key={punch.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                        <div className="flex items-center gap-3">
-                          <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                          <div>
-                            <p className="font-medium">{punch.business.name}</p>
-                            <p className="text-sm text-gray-600 flex items-center gap-1">
-                              <Calendar className="h-3 w-3" />
-                              {new Date(punch.created_at).toLocaleDateString()} at{" "}
-                              {new Date(punch.created_at).toLocaleTimeString()}
-                            </p>
-                          </div>
-                        </div>
-                        <Badge variant="outline">+1 Punch</Badge>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="redeemed">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Trophy className="h-5 w-5" />
-                  Redeemed Prizes
-                </CardTitle>
-                <CardDescription>Your reward redemption history</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {redeemedPrizes.length === 0 ? (
-                  <div className="text-center py-8">
-                    <Trophy className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-600">No prizes redeemed yet</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {redeemedPrizes.map((redeemed) => (
+            {/* Leaderboard list */}
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+              <div className="px-5 py-4 border-b border-gray-100">
+                <h3 className="font-bold text-gray-900 flex items-center gap-2">
+                  <Crown className="h-4 w-4 text-amber-500" />
+                  Global Rankings
+                </h3>
+                <p className="text-xs text-gray-500">Top customers across all businesses</p>
+              </div>
+              {leaderboardData.length === 0 ? (
+                <div className="p-8 text-center">
+                  <Crown className="h-10 w-10 text-gray-300 mx-auto mb-3" />
+                  <p className="text-sm text-gray-500">No rankings yet</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-gray-50">
+                  {leaderboardData.slice(0, 10).map((entry) => {
+                    const isYou = entry.user_id === user?.id
+                    return (
                       <div
-                        key={redeemed.id}
-                        className="flex items-center justify-between p-3 bg-green-50 rounded-lg border border-green-200"
+                        key={entry.user_id}
+                        className={`flex items-center gap-3 px-5 py-3 ${
+                          isYou ? "bg-amber-50" : "hover:bg-gray-50"
+                        }`}
                       >
-                        <div className="flex items-center gap-3">
-                          <Trophy className="h-5 w-5 text-green-600" />
-                          <div>
-                            <p className="font-medium">{redeemed.prize.name}</p>
-                            <p className="text-sm text-gray-600">{redeemed.business.name}</p>
-                            <p className="text-xs text-gray-500 flex items-center gap-1">
-                              <Calendar className="h-3 w-3" />
-                              {new Date(redeemed.redeemed_at).toLocaleDateString()}
-                            </p>
+                        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
+                          entry.rank === 1 ? "bg-amber-400 text-white" :
+                          entry.rank === 2 ? "bg-gray-300 text-white" :
+                          entry.rank === 3 ? "bg-amber-600 text-white" :
+                          "bg-gray-100 text-gray-500"
+                        }`}>
+                          {entry.rank}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-semibold text-gray-900 truncate">{entry.display_name}</span>
+                            {entry.badge && <span className="text-sm">{entry.badge}</span>}
+                            {isYou && (
+                              <Badge className="bg-amber-100 text-amber-700 text-[10px] px-1.5 py-0">You</Badge>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 text-[10px] text-gray-500">
+                            <span>{entry.total_punches} punches</span>
+                            {entry.businesses_visited && <span>{entry.businesses_visited} businesses</span>}
+                            <Badge className={`text-[10px] px-1 py-0 ${
+                              entry.tier === 'platinum' ? 'bg-purple-100 text-purple-700' :
+                              entry.tier === 'gold' ? 'bg-amber-100 text-amber-700' :
+                              entry.tier === 'silver' ? 'bg-gray-100 text-gray-600' :
+                              'bg-orange-100 text-orange-700'
+                            }`}>
+                              {entry.tier}
+                            </Badge>
                           </div>
                         </div>
-                        <Badge className="bg-green-500">Redeemed</Badge>
+                        <div className="text-right flex-shrink-0">
+                          <div className="text-sm font-bold text-gray-900">{entry.total_punches}</div>
+                          <div className="text-[10px] text-gray-400">punches</div>
+                        </div>
                       </div>
-                    ))}
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
+            {!isLeaderboardOptedIn && (
+              <div className="bg-amber-50 rounded-2xl border border-amber-200 p-6 text-center">
+                <Crown className="h-10 w-10 text-amber-500 mx-auto mb-3" />
+                <h3 className="font-semibold text-gray-900 mb-1">Join the Competition</h3>
+                <p className="text-sm text-gray-600 mb-3">
+                  Opt in to compete with other customers
+                </p>
+                <Button
+                  size="sm"
+                  onClick={() => updateLeaderboardSettings(true, user?.name || '')}
+                  className="bg-amber-500 hover:bg-amber-600 text-white rounded-xl"
+                >
+                  <Crown className="h-3.5 w-3.5 mr-1" />
+                  Join Leaderboard
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* History Tab */}
+        {activeTab === "history" && (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-100">
+              <h3 className="font-bold text-gray-900 flex items-center gap-2">
+                <History className="h-4 w-4 text-gray-500" />
+                Recent Punches
+              </h3>
+            </div>
+            {punchHistory.length === 0 ? (
+              <div className="p-8 text-center">
+                <History className="h-10 w-10 text-gray-300 mx-auto mb-3" />
+                <p className="text-sm text-gray-500">No punch history yet</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-50">
+                {punchHistory.map((punch) => (
+                  <div key={punch.id} className="flex items-center justify-between px-5 py-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-2 h-2 bg-amber-400 rounded-full"></div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">{punch.business.name}</p>
+                        <p className="text-[10px] text-gray-500 flex items-center gap-1">
+                          <Calendar className="h-3 w-3" />
+                          {new Date(punch.created_at).toLocaleDateString()} at{" "}
+                          {new Date(punch.created_at).toLocaleTimeString()}
+                        </p>
+                      </div>
+                    </div>
+                    <Badge className="bg-gray-100 text-gray-600 text-[10px]">+1</Badge>
                   </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Redeemed Tab */}
+        {activeTab === "redeemed" && (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-100">
+              <h3 className="font-bold text-gray-900 flex items-center gap-2">
+                <Trophy className="h-4 w-4 text-amber-500" />
+                Redeemed Prizes
+              </h3>
+            </div>
+            {redeemedPrizes.length === 0 ? (
+              <div className="p-8 text-center">
+                <Trophy className="h-10 w-10 text-gray-300 mx-auto mb-3" />
+                <p className="text-sm text-gray-500">No prizes redeemed yet</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-50">
+                {redeemedPrizes.map((redeemed) => (
+                  <div key={redeemed.id} className="flex items-center justify-between px-5 py-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center">
+                        <Trophy className="h-4 w-4 text-emerald-600" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">{redeemed.prize.name}</p>
+                        <p className="text-[10px] text-gray-500">{redeemed.business.name}</p>
+                        <p className="text-[10px] text-gray-400 flex items-center gap-1">
+                          <Calendar className="h-3 w-3" />
+                          {new Date(redeemed.redeemed_at).toLocaleDateString()}
+                        </p>
+                      </div>
+                    </div>
+                    <Badge className="bg-emerald-100 text-emerald-700 text-[10px]">Redeemed</Badge>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )

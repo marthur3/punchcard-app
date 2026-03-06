@@ -19,10 +19,20 @@ const PUBLIC_ROUTES = [
   '/business/signup',
   '/business/onboarding',
   '/business/login',
+  '/leaderboard',
 ];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  // HTTPS enforcement for Heroku (X-Forwarded-Proto header)
+  if (process.env.NODE_ENV === 'production') {
+    const proto = request.headers.get('x-forwarded-proto');
+    if (proto && proto !== 'https') {
+      const httpsUrl = request.url.replace(/^http:/, 'https:');
+      return NextResponse.redirect(httpsUrl, 301);
+    }
+  }
 
   // Skip API routes, static files, and public assets
   if (
@@ -42,8 +52,15 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Check demo mode - if demo mode, allow all routes
-  if (process.env.ENABLE_DEMO_MODE === 'true') {
+  // Demo mode: no Supabase configured OR explicitly enabled — bypass cookie auth
+  // (demo mode uses localStorage auth on the client, not httpOnly cookies)
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const isDemoMode =
+    !supabaseUrl ||
+    supabaseUrl === 'https://demo.supabase.co' ||
+    process.env.ENABLE_DEMO_MODE === 'true';
+
+  if (isDemoMode) {
     return NextResponse.next();
   }
 

@@ -5,7 +5,6 @@ import type React from "react"
 import { Suspense, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -15,7 +14,7 @@ import { useAuth } from "@/lib/auth-context"
 
 export default function RegisterPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div></div>}>
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-gray-900"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-400"></div></div>}>
       <RegisterContent />
     </Suspense>
   )
@@ -74,129 +73,134 @@ function RegisterContent() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        <div className="mb-6">
-          <Link href="/" className="inline-flex items-center text-sm text-gray-600 hover:text-gray-900">
+    <div className="min-h-screen bg-gray-50">
+      {/* Dark header */}
+      <div className="bg-gradient-to-b from-gray-900 to-gray-800">
+        <div className="max-w-md mx-auto px-4 pt-6 pb-16">
+          <Link href="/" className="inline-flex items-center text-sm text-gray-400 hover:text-white transition-colors mb-8">
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Home
           </Link>
+          <h1 className="text-2xl font-bold text-white">Create your account</h1>
+          <p className="text-gray-400 mt-1">Start earning rewards today</p>
         </div>
+      </div>
 
-        <Card className="border border-gray-200 shadow-sm bg-white">
-          <CardHeader className="text-center">
-            <CardTitle className="text-2xl font-bold">Create Account</CardTitle>
-            <CardDescription>Join the digital punch card revolution</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {error && (
-                <Alert variant="destructive">
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
+      {/* Form card pulled up into header */}
+      <div className="max-w-md mx-auto px-4 -mt-8 pb-8">
+        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {error && (
+              <Alert variant="destructive" className="border-red-200 bg-red-50">
+                <AlertDescription className="text-red-800">{error}</AlertDescription>
+              </Alert>
+            )}
 
-              <div className="space-y-2">
-                <Label htmlFor="name">Full Name</Label>
-                <Input
-                  id="name"
-                  name="name"
-                  type="text"
-                  value={formData.name}
-                  onChange={handleChange}
-                  placeholder="John Doe"
-                  required
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  name="email"
-                  type="email"
-                  value={formData.email}
-                  onChange={handleChange}
-                  placeholder="your@email.com"
-                  required
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="phone">Phone (Optional)</Label>
-                <Input
-                  id="phone"
-                  name="phone"
-                  type="tel"
-                  value={formData.phone}
-                  onChange={handleChange}
-                  placeholder="+1 (555) 123-4567"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
-                <div className="relative">
-                  <Input
-                    id="password"
-                    name="password"
-                    type={showPassword ? "text" : "password"}
-                    value={formData.password}
-                    onChange={handleChange}
-                    placeholder="Create a password"
-                    required
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                    onClick={() => setShowPassword(!showPassword)}
-                  >
-                    {showPassword ? (
-                      <EyeOff className="h-4 w-4 text-gray-400" />
-                    ) : (
-                      <Eye className="h-4 w-4 text-gray-400" />
-                    )}
-                  </Button>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="confirmPassword">Confirm Password</Label>
-                <Input
-                  id="confirmPassword"
-                  name="confirmPassword"
-                  type="password"
-                  value={formData.confirmPassword}
-                  onChange={handleChange}
-                  placeholder="Confirm your password"
-                  required
-                />
-              </div>
-
-              <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? (
-                  "Creating account..."
-                ) : (
-                  <>
-                    <UserPlus className="h-4 w-4 mr-2" />
-                    Create Account
-                  </>
-                )}
-              </Button>
-            </form>
-
-            <div className="mt-6 text-center">
-              <p className="text-sm text-gray-600">
-                Already have an account?{" "}
-                <Link href="/auth/login" className="text-blue-600 hover:underline font-medium">
-                  Sign in
-                </Link>
-              </p>
+            <div className="space-y-2">
+              <Label htmlFor="name" className="text-gray-700 text-sm font-medium">Full Name</Label>
+              <Input
+                id="name"
+                name="name"
+                type="text"
+                value={formData.name}
+                onChange={handleChange}
+                placeholder="John Doe"
+                className="h-11 border-gray-200 bg-gray-50 focus:bg-white focus:border-amber-400 focus:ring-amber-400 rounded-xl"
+                required
+              />
             </div>
-          </CardContent>
-        </Card>
+
+            <div className="space-y-2">
+              <Label htmlFor="email" className="text-gray-700 text-sm font-medium">Email</Label>
+              <Input
+                id="email"
+                name="email"
+                type="email"
+                value={formData.email}
+                onChange={handleChange}
+                placeholder="your@email.com"
+                className="h-11 border-gray-200 bg-gray-50 focus:bg-white focus:border-amber-400 focus:ring-amber-400 rounded-xl"
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="phone" className="text-gray-700 text-sm font-medium">Phone (Optional)</Label>
+              <Input
+                id="phone"
+                name="phone"
+                type="tel"
+                value={formData.phone}
+                onChange={handleChange}
+                placeholder="+1 (555) 123-4567"
+                className="h-11 border-gray-200 bg-gray-50 focus:bg-white focus:border-amber-400 focus:ring-amber-400 rounded-xl"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="password" className="text-gray-700 text-sm font-medium">Password</Label>
+              <div className="relative">
+                <Input
+                  id="password"
+                  name="password"
+                  type={showPassword ? "text" : "password"}
+                  value={formData.password}
+                  onChange={handleChange}
+                  placeholder="Create a password"
+                  className="h-11 border-gray-200 bg-gray-50 focus:bg-white focus:border-amber-400 focus:ring-amber-400 rounded-xl"
+                  required
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                  onClick={() => setShowPassword(!showPassword)}
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4 text-gray-400" />
+                  ) : (
+                    <Eye className="h-4 w-4 text-gray-400" />
+                  )}
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="confirmPassword" className="text-gray-700 text-sm font-medium">Confirm Password</Label>
+              <Input
+                id="confirmPassword"
+                name="confirmPassword"
+                type="password"
+                value={formData.confirmPassword}
+                onChange={handleChange}
+                placeholder="Confirm your password"
+                className="h-11 border-gray-200 bg-gray-50 focus:bg-white focus:border-amber-400 focus:ring-amber-400 rounded-xl"
+                required
+              />
+            </div>
+
+            <Button type="submit" className="w-full h-11 bg-gray-900 hover:bg-gray-800 text-white rounded-xl font-medium" disabled={isLoading}>
+              {isLoading ? (
+                "Creating account..."
+              ) : (
+                <>
+                  <UserPlus className="h-4 w-4 mr-2" />
+                  Create Account
+                </>
+              )}
+            </Button>
+          </form>
+
+          <div className="mt-6 text-center">
+            <p className="text-sm text-gray-500">
+              Already have an account?{" "}
+              <Link href="/auth/login" className="text-amber-600 hover:text-amber-700 font-medium">
+                Sign in
+              </Link>
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   )
