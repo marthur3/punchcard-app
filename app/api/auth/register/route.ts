@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { registerSchema } from '@/lib/validations';
 import { hashPassword, generateSessionToken, setCustomerSession } from '@/lib/auth/server';
-import { getSupabaseServer } from '@/lib/supabase';
+import { getSupabaseServer, isDemoMode } from '@/lib/supabase';
 import { checkRateLimit, getClientIP } from '@/lib/rate-limit';
 
 export async function POST(request: NextRequest) {
@@ -20,6 +20,19 @@ export async function POST(request: NextRequest) {
     }
 
     const { email, password, name, phone } = parsed.data;
+
+    // Demo mode: create a local user without touching the database
+    if (isDemoMode) {
+      const newUser = {
+        id: `user-${Date.now()}`,
+        email: email.toLowerCase(),
+        name,
+        phone: phone || null,
+        created_at: new Date().toISOString(),
+      };
+      return NextResponse.json({ success: true, user: newUser, demo: true });
+    }
+
     const db = getSupabaseServer();
 
     // Check if user already exists

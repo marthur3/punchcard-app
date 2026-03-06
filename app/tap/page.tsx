@@ -316,7 +316,7 @@ function TapContent() {
               <Button
                 className="w-full h-12 bg-gray-900 hover:bg-gray-800 text-white rounded-xl font-medium"
                 size="lg"
-                onClick={() => router.push(`/auth/register?redirect=/tap?nfc=${nfcTagId}`)}
+                onClick={() => router.push(`/auth/register?redirect=${encodeURIComponent('/tap?nfc=' + nfcTagId)}`)}
               >
                 <UserPlus className="mr-2 h-5 w-5" />
                 Sign Up to Start Earning
@@ -324,7 +324,7 @@ function TapContent() {
               <Button
                 variant="ghost"
                 className="w-full text-gray-500 hover:text-gray-700"
-                onClick={() => router.push(`/auth/login?redirect=/tap?nfc=${nfcTagId}`)}
+                onClick={() => router.push(`/auth/login?redirect=${encodeURIComponent('/tap?nfc=' + nfcTagId)}`)}
               >
                 Already have an account? Sign In
               </Button>

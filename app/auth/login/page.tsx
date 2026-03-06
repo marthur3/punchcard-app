@@ -163,7 +163,7 @@ function LoginContent() {
           <div className="mt-6 text-center">
             <p className="text-sm text-gray-500">
               Don&apos;t have an account?{" "}
-              <Link href="/auth/register" className="text-amber-600 hover:text-amber-700 font-medium">
+              <Link href={`/auth/register?redirect=${encodeURIComponent(redirect)}`} className="text-amber-600 hover:text-amber-700 font-medium">
                 Sign up
               </Link>
             </p>

@@ -122,9 +122,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { success: false, error: data.error || "Registration failed" }
       }
 
-      // Cookie is set by server, update local state
-      setUser(data.user)
-      setIsDemoMode(false)
+      if (data.demo) {
+        // Demo mode — store in localStorage just like login
+        setDemoUser(data.user)
+        setUser(data.user)
+        setIsDemoMode(true)
+      } else {
+        // Real mode — cookie set by server
+        setUser(data.user)
+        setIsDemoMode(false)
+      }
 
       return { success: true }
     } catch {

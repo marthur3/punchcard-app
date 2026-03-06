@@ -195,7 +195,7 @@ function RegisterContent() {
           <div className="mt-6 text-center">
             <p className="text-sm text-gray-500">
               Already have an account?{" "}
-              <Link href="/auth/login" className="text-amber-600 hover:text-amber-700 font-medium">
+              <Link href={`/auth/login?redirect=${encodeURIComponent(redirect)}`} className="text-amber-600 hover:text-amber-700 font-medium">
                 Sign in
               </Link>
             </p>
