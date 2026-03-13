@@ -8,6 +8,16 @@ import { Progress } from "@/components/ui/progress"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { CreditCard, Gift, History, LogOut, Star, Trophy, Calendar, Zap, Crown, Settings, CheckCircle, X } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
+import {
+  getUserPunchCards,
+  getAllPrizes,
+  getRedeemedPrizes,
+  getSavedPunchCards,
+  upsertPunchCard,
+  addRedeemedPrize,
+  getLeaderboardSettings,
+  saveLeaderboardSettings,
+} from "@/lib/demo-store"
 import Link from "next/link"
 
 interface PunchCard {
@@ -92,68 +102,34 @@ function DashboardContent() {
     setIsLoading(true)
     try {
       if (isDemoMode) {
-        const { demoPunchCards, demoPrizes, demoPunches, generateLeaderboardData, demoBusinesses } = await import("@/lib/demo-data")
+        const { demoPunches, generateLeaderboardData } = await import("@/lib/demo-data")
 
-        const registeredBusinesses = typeof window !== "undefined"
-          ? JSON.parse(localStorage.getItem("demo_registered_businesses") || "[]")
-          : []
-        const registeredPrizes = typeof window !== "undefined"
-          ? JSON.parse(localStorage.getItem("demo_registered_prizes") || "[]")
-          : []
-        const allBusinesses = [...demoBusinesses, ...registeredBusinesses]
-        const allPrizes = [...demoPrizes, ...registeredPrizes]
-
-        let savedCards: any[] = []
-        if (typeof window !== "undefined") {
-          savedCards = JSON.parse(localStorage.getItem("demo_punch_cards") || "[]")
-        }
-
-        const userCards = demoPunchCards.filter((card) => card.user_id === user.id).map((card) => {
-          const savedCard = savedCards.find((c: any) => c.user_id === user.id && c.business_id === card.business_id)
-          return savedCard || card
-        })
-
-        savedCards.forEach((savedCard: any) => {
-          if (savedCard.user_id === user.id && !userCards.find((c: any) => c.business_id === savedCard.business_id)) {
-            userCards.push(savedCard)
-          }
-        })
-
-        const enrichedCards = userCards.map((card: any) => {
-          if (card.business?.name) return card
-          const biz = allBusinesses.find((b: any) => b.id === card.business_id)
-          return {
-            ...card,
-            business: biz ? { id: biz.id, name: biz.name, description: biz.description, max_punches: biz.max_punches } : card.business,
-          }
-        })
-
+        const enrichedCards = (await getUserPunchCards(user.id))
+          .filter((c): c is typeof c & { business: NonNullable<typeof c.business> } => !!c.business)
         setPunchCards(enrichedCards)
 
-        const userBusinessIds = enrichedCards.map((card: any) => card.business_id)
-        const prizes = allPrizes
+        const allPrizes = await getAllPrizes()
+        const userBusinessIds = enrichedCards.map((c) => c.business_id)
+        const redeemable = allPrizes
           .filter((prize) => userBusinessIds.includes(prize.business_id))
           .map((prize) => ({
             ...prize,
-            business_name: enrichedCards.find((card: any) => card.business_id === prize.business_id)?.business?.name || "",
+            business_name: enrichedCards.find((c) => c.business_id === prize.business_id)?.business?.name || "",
+            business_id: prize.business_id,
           }))
           .filter((prize) => {
-            const card = enrichedCards.find((c: any) => c.business_id === prize.business_id)
+            const card = enrichedCards.find((c) => c.business_id === prize.business_id)
             return card && card.current_punches >= prize.punches_required
           })
+        setAvailablePrizes(redeemable)
 
-        setAvailablePrizes(prizes)
         setPunchHistory(demoPunches.filter((punch) => punch.user_id === user.id))
+        setRedeemedPrizes(getRedeemedPrizes().filter((r) => r.user_id === user.id))
 
-        const savedRedeemed = JSON.parse(localStorage.getItem("demo_redeemed_prizes") || "[]")
-        const userRedeemed = savedRedeemed.filter((r: any) => r.user_id === user.id)
-        setRedeemedPrizes(userRedeemed)
+        setLeaderboardData(generateLeaderboardData())
 
-        const leaderboard = generateLeaderboardData()
-        setLeaderboardData(leaderboard)
-
-        const leaderboardSettings = JSON.parse(localStorage.getItem('leaderboard_settings') || '{}')
-        const userSettings = leaderboardSettings[user.id] || {}
+        const lbSettings = getLeaderboardSettings()
+        const userSettings = lbSettings[user.id] || {}
         setIsLeaderboardOptedIn(userSettings.opted_in || false)
         setUserDisplayName(userSettings.display_name || user.name)
       } else {
@@ -181,19 +157,23 @@ function DashboardContent() {
           })
           setPunchCards(cards)
 
+          // Batch-fetch all prizes in a single request instead of N+1 queries
+          const businessIds = cards.map((c: PunchCard) => c.business.id).filter(Boolean)
           const allPrizes: Prize[] = []
-          for (const card of cards) {
-            const prizesRes = await fetch(`/api/prizes?business_id=${card.business.id}`)
+          if (businessIds.length > 0) {
+            const prizesRes = await fetch(`/api/prizes/batch?business_ids=${businessIds.join(',')}`)
             if (prizesRes.ok) {
               const prizesData = await prizesRes.json()
-              const redeemable = (prizesData.prizes || [])
-                .filter((p: any) => card.current_punches >= p.punches_required)
-                .map((p: any) => ({
-                  ...p,
-                  business_name: card.business.name,
-                  business_id: card.business.id,
-                }))
-              allPrizes.push(...redeemable)
+              for (const card of cards) {
+                const redeemable = (prizesData.prizes || [])
+                  .filter((p: any) => p.business_id === card.business.id && card.current_punches >= p.punches_required)
+                  .map((p: any) => ({
+                    ...p,
+                    business_name: card.business.name,
+                    business_id: card.business.id,
+                  }))
+                allPrizes.push(...redeemable)
+              }
             }
           }
           setAvailablePrizes(allPrizes)
@@ -237,15 +217,14 @@ function DashboardContent() {
         const prize = availablePrizes.find(p => p.id === prizeId)
         if (!prize || !user) return
 
-        const savedCards = JSON.parse(localStorage.getItem("demo_punch_cards") || "[]")
-        const cardIndex = savedCards.findIndex((c: any) => c.user_id === user.id && c.business_id === businessId)
-        if (cardIndex >= 0) {
-          savedCards[cardIndex].current_punches = Math.max(0, savedCards[cardIndex].current_punches - prize.punches_required)
-          localStorage.setItem("demo_punch_cards", JSON.stringify(savedCards))
+        const savedCards = getSavedPunchCards()
+        const card = savedCards.find(c => c.user_id === user.id && c.business_id === businessId)
+        if (card) {
+          card.current_punches = Math.max(0, card.current_punches - prize.punches_required)
+          upsertPunchCard(card)
         }
 
-        const redeemed = JSON.parse(localStorage.getItem("demo_redeemed_prizes") || "[]")
-        redeemed.push({
+        addRedeemedPrize({
           id: `redeemed-${Date.now()}`,
           prize_id: prizeId,
           business_id: businessId,
@@ -254,7 +233,6 @@ function DashboardContent() {
           prize: { name: prize.name, description: prize.description },
           business: { name: prize.business_name },
         })
-        localStorage.setItem("demo_redeemed_prizes", JSON.stringify(redeemed))
 
         setRedeemSuccess(`${prize.name} redeemed!`)
         setTimeout(() => setRedeemSuccess(""), 3000)
@@ -279,12 +257,9 @@ function DashboardContent() {
   const updateLeaderboardSettings = (optedIn: boolean, displayName: string) => {
     if (!user) return
 
-    const leaderboardSettings = JSON.parse(localStorage.getItem('leaderboard_settings') || '{}')
-    leaderboardSettings[user.id] = {
-      opted_in: optedIn,
-      display_name: displayName
-    }
-    localStorage.setItem('leaderboard_settings', JSON.stringify(leaderboardSettings))
+    const settings = getLeaderboardSettings()
+    settings[user.id] = { opted_in: optedIn, display_name: displayName }
+    saveLeaderboardSettings(settings)
 
     setIsLeaderboardOptedIn(optedIn)
     setUserDisplayName(displayName)

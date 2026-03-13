@@ -17,7 +17,7 @@ import {
   ArrowLeft,
   PlayCircle
 } from "lucide-react"
-import QRCode from "qrcode"
+import type QRCodeLib from "qrcode"
 
 export default function BusinessOnboardingPage() {
   return (
@@ -63,6 +63,7 @@ function OnboardingContent() {
       const generateQRCode = async () => {
         try {
           const url = `${window.location.origin}/tap?nfc=${nfcTagId}`
+          const QRCode = (await import("qrcode")) as typeof QRCodeLib
           const qrDataUrl = await QRCode.toDataURL(url, {
             width: 300,
             margin: 2,

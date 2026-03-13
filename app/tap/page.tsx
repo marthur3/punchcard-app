@@ -9,6 +9,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Wifi, Gift, Star, Zap, ArrowLeft, UserPlus, AlertTriangle, X, CheckCircle, Trophy } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import { WalletCardModal } from "@/components/wallet-card-modal"
+import {
+  getAllBusinesses,
+  getAllPrizes,
+  getSavedPunchCards,
+  upsertPunchCard,
+} from "@/lib/demo-store"
 import Link from "next/link"
 
 interface Business {
@@ -75,20 +81,11 @@ function TapContent() {
         }
 
         if (isDemoMode) {
-          const { demoBusinesses } = await import("@/lib/demo-data")
-          const found = demoBusinesses.find((b: any) => b.nfc_tag_id === nfcTagId)
+          const allBiz = await getAllBusinesses()
+          const found = allBiz.find((b) => b.nfc_tag_id === nfcTagId)
           if (found) {
             setSelectedBusiness(found)
             return
-          }
-
-          if (typeof window !== "undefined") {
-            const registered = JSON.parse(localStorage.getItem("demo_registered_businesses") || "[]")
-            const regFound = registered.find((b: any) => b.nfc_tag_id === nfcTagId)
-            if (regFound) {
-              setSelectedBusiness(regFound)
-              return
-            }
           }
         }
 
@@ -97,11 +94,7 @@ function TapContent() {
       }
 
       if (isDemoMode) {
-        const { demoBusinesses } = await import("@/lib/demo-data")
-        const registered = typeof window !== "undefined"
-          ? JSON.parse(localStorage.getItem("demo_registered_businesses") || "[]")
-          : []
-        setBusinesses([...demoBusinesses, ...registered])
+        setBusinesses(await getAllBusinesses())
       } else {
         const res = await fetch("/api/businesses")
         if (res.ok) {
@@ -120,14 +113,10 @@ function TapContent() {
 
     try {
       if (isDemoMode) {
-        const { demoPunchCards, demoPrizes } = await import("@/lib/demo-data")
-        let savedCards: any[] = []
-        if (typeof window !== "undefined") {
-          savedCards = JSON.parse(localStorage.getItem("demo_punch_cards") || "[]")
-        }
-
-        const card = savedCards.find((c: any) => c.user_id === user.id && c.business_id === business.id) ||
-                   demoPunchCards.find((c: any) => c.user_id === user.id && c.business_id === business.id)
+        const { demoPunchCards } = await import("@/lib/demo-data")
+        const savedCards = getSavedPunchCards()
+        const card = savedCards.find((c) => c.user_id === user.id && c.business_id === business.id) ||
+                   demoPunchCards.find((c) => c.user_id === user.id && c.business_id === business.id)
 
         setPunchCard({
           current_punches: card?.current_punches || 0,
@@ -136,12 +125,8 @@ function TapContent() {
           business,
         })
 
-        const registeredPrizes = typeof window !== "undefined"
-          ? JSON.parse(localStorage.getItem("demo_registered_prizes") || "[]")
-          : []
-        const allPrizes = [...demoPrizes, ...registeredPrizes]
-        const businessPrizes = allPrizes.filter((p: any) => p.business_id === business.id)
-        setPrizes(businessPrizes)
+        const allPrizes = await getAllPrizes()
+        setPrizes(allPrizes.filter((p) => p.business_id === business.id))
       } else {
         const [cardsRes, prizesRes] = await Promise.all([
           fetch("/api/punch-cards"),
@@ -201,26 +186,14 @@ function TapContent() {
         }
         setPunchCard(updated)
 
-        if (typeof window !== "undefined") {
-          const demoCards = JSON.parse(localStorage.getItem("demo_punch_cards") || "[]")
-          const cardIndex = demoCards.findIndex(
-            (c: any) => c.user_id === user.id && c.business_id === selectedBusiness.id
-          )
-          const cardData = {
-            id: `card-${user.id}-${selectedBusiness.id}`,
-            user_id: user.id,
-            business_id: selectedBusiness.id,
-            current_punches: updated.current_punches,
-            total_punches: updated.total_punches,
-            updated_at: new Date().toISOString(),
-          }
-          if (cardIndex >= 0) {
-            demoCards[cardIndex] = cardData
-          } else {
-            demoCards.push(cardData)
-          }
-          localStorage.setItem("demo_punch_cards", JSON.stringify(demoCards))
-        }
+        upsertPunchCard({
+          id: `card-${user.id}-${selectedBusiness.id}`,
+          user_id: user.id,
+          business_id: selectedBusiness.id,
+          current_punches: updated.current_punches,
+          total_punches: updated.total_punches,
+          updated_at: new Date().toISOString(),
+        })
       } else {
         const res = await fetch("/api/punches", {
           method: "POST",

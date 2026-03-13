@@ -18,6 +18,13 @@ import {
 } from "@/components/ui/dialog"
 import { Store, Gift, Users, TrendingUp, Plus, Edit, CheckCircle, LogOut, RefreshCw, Search, Phone, Mail, Award } from "lucide-react"
 import { isDemoMode } from "@/lib/supabase"
+import {
+  getAllBusinesses,
+  getAllPrizes,
+  getAdminSession,
+  getRegisteredPrizes,
+  saveRegisteredPrizes,
+} from "@/lib/demo-store"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 
@@ -92,13 +99,10 @@ export default function BusinessDashboard() {
 
   const fetchBusinesses = async () => {
     if (isDemoMode) {
-      const { demoBusinesses } = await import("@/lib/demo-data")
-
-      const registeredBusinesses = JSON.parse(localStorage.getItem('demo_registered_businesses') || '[]')
-      const allBusinesses = [...demoBusinesses, ...registeredBusinesses]
+      const allBusinesses = await getAllBusinesses()
       setBusinesses(allBusinesses)
 
-      const adminSession = JSON.parse(localStorage.getItem('business_admin_session') || '{}')
+      const adminSession = getAdminSession()
       if (adminSession.business_id) {
         const userBusiness = allBusinesses.find(b => b.id === adminSession.business_id)
         if (userBusiness) {
@@ -130,11 +134,11 @@ export default function BusinessDashboard() {
 
   const fetchPrizes = async (businessId: string) => {
     if (isDemoMode) {
-      const { demoPrizes } = await import("@/lib/demo-data")
-      const registeredPrizes = JSON.parse(localStorage.getItem('demo_registered_prizes') || '[]')
-      const demoPrizesForBusiness = demoPrizes.filter((p) => p.business_id === businessId)
-      const registeredPrizesForBusiness = registeredPrizes.filter((p: any) => p.business_id === businessId)
-      setPrizes([...demoPrizesForBusiness, ...registeredPrizesForBusiness])
+      const allPrizes = await getAllPrizes()
+      setPrizes(allPrizes
+        .filter((p) => p.business_id === businessId)
+        .map((p) => ({ ...p, is_active: p.is_active ?? true }))
+      )
       return
     }
 
@@ -270,9 +274,9 @@ export default function BusinessDashboard() {
           punches_required: newPrize.punches_required,
           is_active: true,
         }
-        const registeredPrizes = JSON.parse(localStorage.getItem('demo_registered_prizes') || '[]')
-        registeredPrizes.push(prize)
-        localStorage.setItem('demo_registered_prizes', JSON.stringify(registeredPrizes))
+        const regPrizes = getRegisteredPrizes()
+        regPrizes.push(prize)
+        saveRegisteredPrizes(regPrizes)
         setPrizes([...prizes, prize])
       } else {
         const res = await fetch("/api/business/prizes", {
@@ -785,11 +789,11 @@ export default function BusinessDashboard() {
                         if (!editingPrize) return
                         const updated = { ...editingPrize, ...editPrizeData }
                         if (isDemoMode) {
-                          const registeredPrizes = JSON.parse(localStorage.getItem('demo_registered_prizes') || '[]')
-                          const idx = registeredPrizes.findIndex((p: any) => p.id === editingPrize.id)
+                          const regPrizes = getRegisteredPrizes()
+                          const idx = regPrizes.findIndex((p) => p.id === editingPrize.id)
                           if (idx >= 0) {
-                            registeredPrizes[idx] = { ...registeredPrizes[idx], ...editPrizeData }
-                            localStorage.setItem('demo_registered_prizes', JSON.stringify(registeredPrizes))
+                            regPrizes[idx] = { ...regPrizes[idx], ...editPrizeData }
+                            saveRegisteredPrizes(regPrizes)
                           }
                         } else {
                           await fetch("/api/business/prizes", {

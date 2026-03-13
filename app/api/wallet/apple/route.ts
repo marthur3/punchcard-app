@@ -88,7 +88,7 @@ export async function GET(request: NextRequest) {
 
       const buffer = pass.getAsBuffer()
 
-      return new NextResponse(buffer, {
+      return new NextResponse(buffer as unknown as BodyInit, {
         headers: {
           'Content-Type': 'application/vnd.apple.pkpass',
           'Content-Disposition': `attachment; filename="${businessName.replace(/\s+/g, '_')}_loyalty.pkpass"`,

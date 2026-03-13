@@ -1,21 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 const hits = new Map<string, number[]>();
+let lastCleanup = Date.now();
+const CLEANUP_INTERVAL_MS = 60_000;
+const MAX_KEY_AGE_MS = 3_600_000;
 
-// Periodic cleanup of stale keys every 60 seconds
-setInterval(() => {
+/**
+ * Lazy cleanup: evict stale entries inline instead of using setInterval.
+ * This avoids memory leaks in serverless/edge environments where
+ * module-level timers are never cleared.
+ */
+function lazyCleanup() {
   const now = Date.now();
+  if (now - lastCleanup < CLEANUP_INTERVAL_MS) return;
+  lastCleanup = now;
+
   for (const [key, timestamps] of hits) {
-    const fresh = timestamps.filter((t) => t > now - 3600000);
+    const fresh = timestamps.filter((t) => t > now - MAX_KEY_AGE_MS);
     if (fresh.length === 0) {
       hits.delete(key);
     } else {
       hits.set(key, fresh);
     }
   }
-}, 60000);
+}
 
 function rateLimit(key: string, limit: number, windowMs: number): { success: boolean; remaining: number; retryAfterMs: number } {
+  lazyCleanup();
+
   const now = Date.now();
   const timestamps = hits.get(key) || [];
   const windowStart = now - windowMs;

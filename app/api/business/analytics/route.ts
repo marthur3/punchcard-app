@@ -22,38 +22,22 @@ export async function GET() {
     const db = getSupabaseServer();
     const businessId = admin.business_id;
 
-    // Total punches at this business
-    const { count: totalPunches } = await db
-      .from('punches')
-      .select('*', { count: 'exact', head: true })
-      .eq('business_id', businessId);
+    // Run all independent count queries in parallel
+    const [punchesResult, usersResult, redeemedResult, avgResult] = await Promise.all([
+      db.from('punches').select('*', { count: 'exact', head: true }).eq('business_id', businessId),
+      db.from('punch_cards').select('*', { count: 'exact', head: true }).eq('business_id', businessId),
+      db.from('redeemed_prizes').select('*', { count: 'exact', head: true }).eq('business_id', businessId),
+      db.from('punch_cards').select('total_punches').eq('business_id', businessId),
+    ]);
 
-    // Active users (users with punch cards at this business)
-    const { count: activeUsers } = await db
-      .from('punch_cards')
-      .select('*', { count: 'exact', head: true })
-      .eq('business_id', businessId);
-
-    // Prizes redeemed
-    const { count: prizesRedeemed } = await db
-      .from('redeemed_prizes')
-      .select('*', { count: 'exact', head: true })
-      .eq('business_id', businessId);
-
-    // Average punches per user
-    const { data: avgData } = await db
-      .from('punch_cards')
-      .select('total_punches')
-      .eq('business_id', businessId);
-
-    const avgPunches = avgData && avgData.length > 0
-      ? avgData.reduce((sum: number, card: any) => sum + card.total_punches, 0) / avgData.length
+    const avgPunches = avgResult.data && avgResult.data.length > 0
+      ? avgResult.data.reduce((sum: number, card: { total_punches: number }) => sum + card.total_punches, 0) / avgResult.data.length
       : 0;
 
     return NextResponse.json({
-      total_punches: totalPunches || 0,
-      active_users: activeUsers || 0,
-      prizes_redeemed: prizesRedeemed || 0,
+      total_punches: punchesResult.count || 0,
+      active_users: usersResult.count || 0,
+      prizes_redeemed: redeemedResult.count || 0,
       avg_punches_per_user: Math.round(avgPunches * 10) / 10,
     });
   } catch (error) {

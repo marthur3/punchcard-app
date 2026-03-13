@@ -45,47 +45,48 @@ export async function GET() {
     const db = getSupabaseServer()
     const businessId = admin.business_id
 
-    const { data: punchCards } = await db
-      .from('punch_cards')
-      .select(`
-        id,
-        user_id,
-        current_punches,
-        total_punches,
-        created_at,
-        updated_at,
-        users (
+    // Run all three queries in parallel instead of sequentially
+    const [cardsResult, redemptionsResult, lastPunchesResult] = await Promise.all([
+      db
+        .from('punch_cards')
+        .select(`
           id,
-          name,
-          email,
-          phone
-        )
-      `)
-      .eq('business_id', businessId)
-      .order('total_punches', { ascending: false })
-
-    const { data: redemptions } = await db
-      .from('redeemed_prizes')
-      .select('user_id')
-      .eq('business_id', businessId)
+          user_id,
+          current_punches,
+          total_punches,
+          created_at,
+          updated_at,
+          users (
+            id,
+            name,
+            email,
+            phone
+          )
+        `)
+        .eq('business_id', businessId)
+        .order('total_punches', { ascending: false }),
+      db
+        .from('redeemed_prizes')
+        .select('user_id')
+        .eq('business_id', businessId),
+      db
+        .from('punches')
+        .select('user_id, created_at')
+        .eq('business_id', businessId)
+        .order('created_at', { ascending: false }),
+    ])
 
     const redemptionCounts: Record<string, number> = {}
-    redemptions?.forEach((r: any) => {
+    redemptionsResult.data?.forEach((r: { user_id: string }) => {
       redemptionCounts[r.user_id] = (redemptionCounts[r.user_id] || 0) + 1
     })
 
-    const { data: lastPunches } = await db
-      .from('punches')
-      .select('user_id, created_at')
-      .eq('business_id', businessId)
-      .order('created_at', { ascending: false })
-
     const lastVisits: Record<string, string> = {}
-    lastPunches?.forEach((p: any) => {
+    lastPunchesResult.data?.forEach((p: { user_id: string; created_at: string }) => {
       if (!lastVisits[p.user_id]) lastVisits[p.user_id] = p.created_at
     })
 
-    const customers = punchCards?.map((card: any) => ({
+    const customers = cardsResult.data?.map((card: any) => ({
       id: card.users?.id,
       name: card.users?.name,
       email: card.users?.email,
